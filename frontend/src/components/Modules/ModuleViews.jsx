@@ -1,205 +1,793 @@
 import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../../api';
 
-// 1. ACADEMIC PERFORMANCE
+// ==========================================================
+// 1. ACADEMIC PERFORMANCE MODULE
+// ==========================================================
 export function AcademicPerformanceView() {
-  const [marks, setMarks] = useState([]);
+  const [data, setData] = useState(null);
+  const [selectedSemester, setSelectedSemester] = useState(6);
   const [loading, setLoading] = useState(true);
+  const [editingMark, setEditingMark] = useState(null);
+  const [formInternal, setFormInternal] = useState(0);
+  const [formLab, setFormLab] = useState(0);
+  const [formExternal, setFormExternal] = useState(0);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
 
-  useEffect(() => {
-    apiRequest('/academics/performance')
-      .then(res => setMarks(res.marks || []))
+  const loadPerformance = (sem) => {
+    setLoading(true);
+    apiRequest(`/academics/performance?semester=${sem}`)
+      .then(res => {
+        setData(res);
+        setSelectedSemester(res.selected_semester);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    loadPerformance(selectedSemester);
+  }, [selectedSemester]);
+
+  const openEditModal = (mark) => {
+    setEditingMark(mark);
+    setFormInternal(mark.internal_marks);
+    setFormLab(mark.lab_marks);
+    setFormExternal(mark.external_marks);
+    setEditError('');
+    setEditSuccess('');
+  };
+
+  const handleUpdateMarks = async (e) => {
+    e.preventDefault();
+    setEditError('');
+    setEditSuccess('');
+
+    try {
+      const res = await apiRequest(`/academics/marks/${editingMark.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          internal_marks: parseInt(formInternal, 10),
+          lab_marks: parseInt(formLab, 10),
+          external_marks: parseInt(formExternal, 10)
+        })
+      });
+      setEditSuccess(res.message);
+      setTimeout(() => {
+        setEditingMark(null);
+        loadPerformance(selectedSemester);
+      }, 1000);
+    } catch (err) {
+      setEditError(err.message);
+    }
+  };
+
+  const calcPreviewTotal = parseInt(formInternal || 0, 10) + parseInt(formLab || 0, 10) + parseInt(formExternal || 0, 10);
+  let previewGrade = 'F';
+  if (calcPreviewTotal >= 90) previewGrade = 'O';
+  else if (calcPreviewTotal >= 80) previewGrade = 'A+';
+  else if (calcPreviewTotal >= 70) previewGrade = 'A';
+  else if (calcPreviewTotal >= 60) previewGrade = 'B+';
+  else if (calcPreviewTotal >= 55) previewGrade = 'B';
+  else if (calcPreviewTotal >= 50) previewGrade = 'C';
+  else if (calcPreviewTotal >= 40) previewGrade = 'P';
 
   return (
-    <div className="panel-card">
-      <div className="panel-card-header">
-        <h3 className="panel-card-title">Subject-Wise Marks & Grades</h3>
+    <div>
+      {/* Semester Header & Grade Summary */}
+      <div className="banner-card">
+        <div>
+          <div className="banner-title">Academic Marks & Semester Transcript</div>
+          <div className="banner-sub">
+            Review Continuous Internal Evaluation (CIE) and Semester End Examination (SEE) scores.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ fontSize: '13px', fontWeight: '600' }}>Select Semester:</label>
+          <select
+            className="form-select"
+            style={{ width: '150px' }}
+            value={selectedSemester}
+            onChange={(e) => setSelectedSemester(parseInt(e.target.value, 10))}
+          >
+            {data?.available_semesters?.map((s) => (
+              <option key={s} value={s}>Semester {s}</option>
+            ))}
+          </select>
+        </div>
       </div>
-      <div className="table-responsive">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Course Code</th>
-              <th>Course Title</th>
-              <th>Credits</th>
-              <th>Internal</th>
-              <th>Lab</th>
-              <th>End-Sem</th>
-              <th>Total (/100)</th>
-              <th>Grade</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan="9">Loading performance records...</td></tr>
-            ) : (
-              marks.map((m) => (
-                <tr key={m.id}>
-                  <td><strong>{m.course_code}</strong></td>
-                  <td>{m.course_title}</td>
-                  <td>{m.credits}</td>
-                  <td>{m.internal_marks}</td>
-                  <td>{m.lab_marks}</td>
-                  <td>{m.external_marks}</td>
-                  <td><strong>{m.total_marks}</strong></td>
-                  <td><span className="status-pill status-neutral">{m.grade}</span></td>
-                  <td><span className="status-pill status-success">{m.status}</span></td>
+
+      {/* KPI Stats */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-label">Semester SGPA</div>
+          <div className="stat-value">{data?.sgpa ?? '--'}</div>
+          <div className="stat-footer">Computed for Semester {selectedSemester}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Cumulative CGPA</div>
+          <div className="stat-value">{data?.cgpa ?? '--'}</div>
+          <div className="stat-footer">Across All Recorded Semesters</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Total Credits</div>
+          <div className="stat-value">{data?.total_credits ?? 0}</div>
+          <div className="stat-footer">Course Credits Earned</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Semester Result</div>
+          <div className="stat-value">
+            <span className={`status-pill ${data?.result_status === 'PASS' ? 'status-success' : 'status-danger'}`}>
+              {data?.result_status || 'PASS'}
+            </span>
+          </div>
+          <div className="stat-footer">{data?.passed_subjects} Passed, {data?.failed_subjects} Backlogs</div>
+        </div>
+      </div>
+
+      {/* Subject-Wise Marks Table */}
+      <div className="panel-card">
+        <div className="panel-card-header">
+          <h3 className="panel-card-title">Subject-Wise Marks Breakdown (Semester {selectedSemester})</h3>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>
+            Faculty & Admins can click "Edit Marks" to update scores
+          </span>
+        </div>
+        <div className="table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Course Code</th>
+                <th>Course Title</th>
+                <th>Credits</th>
+                <th>Internal (IA /30)</th>
+                <th>Lab / Practical (/20)</th>
+                <th>External Exam (/50)</th>
+                <th>Total Marks (/100)</th>
+                <th>Grade</th>
+                <th>Status</th>
+                <th>Faculty Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="10" style={{ textAlign: 'center' }}>Loading marks...</td></tr>
+              ) : (
+                data?.marks?.map((m) => (
+                  <tr key={m.id}>
+                    <td><strong>{m.course_code}</strong></td>
+                    <td>{m.course_title}</td>
+                    <td>{m.credits}</td>
+                    <td>{m.internal_marks} / 30</td>
+                    <td>{m.lab_marks} / 20</td>
+                    <td>{m.external_marks} / 50</td>
+                    <td><strong>{m.total_marks} / 100</strong></td>
+                    <td>
+                      <span className="status-pill status-neutral">
+                        {m.grade}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${m.status === 'Pass' ? 'status-success' : 'status-danger'}`}>
+                        {m.status}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => openEditModal(m)}
+                      >
+                        Edit Marks
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Faculty Marks Update Form Modal */}
+      {editingMark && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="panel-card" style={{ width: '100%', maxWidth: '480px', margin: '20px' }}>
+            <div className="panel-card-header">
+              <h3 className="panel-card-title">Update Marks: {editingMark.course_code}</h3>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setEditingMark(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="panel-card-body">
+              <p style={{ fontSize: '13px', color: '#475569', marginBottom: '14px' }}>
+                Course: <strong>{editingMark.course_title}</strong> (Credits: {editingMark.credits})
+              </p>
+
+              {editError && <div className="alert-box alert-danger">{editError}</div>}
+              {editSuccess && <div className="alert-box alert-success">{editSuccess}</div>}
+
+              <form onSubmit={handleUpdateMarks}>
+                <div className="form-group">
+                  <label>Continuous Internal Evaluation (IA1 + IA2) [Max: 30]</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="30"
+                    required
+                    className="form-input"
+                    value={formInternal}
+                    onChange={(e) => setFormInternal(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Lab / Practical Marks [Max: 20]</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="20"
+                    required
+                    className="form-input"
+                    value={formLab}
+                    onChange={(e) => setFormLab(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Semester End Exam (SEE) Score [Max: 50]</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    required
+                    className="form-input"
+                    value={formExternal}
+                    onChange={(e) => setFormExternal(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '16px', fontSize: '13px' }}>
+                  <div>Calculated Total: <strong>{calcPreviewTotal} / 100</strong></div>
+                  <div style={{ marginTop: '4px' }}>Projected Grade: <strong>{previewGrade}</strong> ({calcPreviewTotal >= 40 && formExternal >= 18 ? 'Pass' : 'Fail'})</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="submit" className="btn-primary">Save Updated Marks</button>
+                  <button type="button" className="btn-secondary" onClick={() => setEditingMark(null)}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==========================================================
+// 2. SMART ATTENDANCE MODULE
+// ==========================================================
+export function AttendanceView() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Faculty Mark Attendance State
+  const [markCourse, setMarkCourse] = useState('CS601');
+  const [markAction, setMarkAction] = useState('present');
+  const [markDate, setMarkDate] = useState('Today');
+  const [markMessage, setMarkMessage] = useState('');
+  const [markLoading, setMarkLoading] = useState(false);
+
+  const loadAttendance = () => {
+    setLoading(true);
+    apiRequest('/attendance')
+      .then(res => {
+        setData(res);
+        if (res.attendance && res.attendance.length > 0 && !markCourse) {
+          setMarkCourse(res.attendance[0].course_code);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadAttendance();
+  }, []);
+
+  const handleMarkAttendance = async (e) => {
+    e.preventDefault();
+    setMarkMessage('');
+    setMarkLoading(true);
+
+    try {
+      const res = await apiRequest('/attendance/mark', {
+        method: 'POST',
+        body: JSON.stringify({
+          course_code: markCourse,
+          action: markAction,
+          date: markDate
+        })
+      });
+      setMarkMessage(res.message);
+      loadAttendance();
+    } catch (err) {
+      alert(`Error marking attendance: ${err.message}`);
+    } finally {
+      setMarkLoading(false);
+    }
+  };
+
+  const summary = data?.overall_summary;
+  const list = data?.attendance || [];
+
+  return (
+    <div>
+      {/* Banner */}
+      <div className="banner-card">
+        <div>
+          <div className="banner-title">Smart Attendance Register</div>
+          <div className="banner-sub">
+            Track conducted hours, present hours, absences, and official On-Duty (OD) credits.
+          </div>
+        </div>
+        <div>
+          <span className={`status-pill ${summary?.overall_percentage >= 75 ? 'status-success' : 'status-danger'}`}>
+            Overall: {summary?.overall_percentage || 0}% ({summary?.overall_status})
+          </span>
+        </div>
+      </div>
+
+      {/* Aggregate KPI Deck */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-label">Total Conducted</div>
+          <div className="stat-value">{summary?.total_conducted || 0} hrs</div>
+          <div className="stat-footer">All Courses Combined</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Attended Classes</div>
+          <div className="stat-value" style={{ color: '#15803d' }}>{summary?.total_attended || 0} hrs</div>
+          <div className="stat-footer">Regular Classes Attended</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Absent Classes</div>
+          <div className="stat-value" style={{ color: '#b91c1c' }}>{summary?.total_absent || 0} hrs</div>
+          <div className="stat-footer">Missed Sessions</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">On-Duty (OD) Approved</div>
+          <div className="stat-value" style={{ color: '#b45309' }}>{summary?.total_od || 0} hrs</div>
+          <div className="stat-footer">Credited Sports/Symposiums</div>
+        </div>
+      </div>
+
+      {/* Split Section: Subject-Wise Attendance and Faculty Mark Attendance Tool */}
+      <div className="dashboard-sections-grid">
+        {/* Subject-Wise Table */}
+        <div className="panel-card" style={{ gridColumn: 'span 2' }}>
+          <div className="panel-card-header">
+            <h3 className="panel-card-title">Subject-Wise Attendance Details</h3>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>Minimum 75% required for exam eligibility</span>
+          </div>
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Course Code</th>
+                  <th>Course Title</th>
+                  <th>Faculty</th>
+                  <th>Conducted</th>
+                  <th>Attended</th>
+                  <th>Absent</th>
+                  <th>On-Duty (OD)</th>
+                  <th>Percentage</th>
+                  <th>Safe Bunks Left</th>
+                  <th>Eligibility Status</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan="10" style={{ textAlign: 'center' }}>Loading attendance records...</td></tr>
+                ) : (
+                  list.map((item) => (
+                    <tr key={item.id}>
+                      <td><strong>{item.course_code}</strong></td>
+                      <td>{item.course_title}</td>
+                      <td>{item.faculty_name}</td>
+                      <td>{item.total_hours}</td>
+                      <td style={{ color: '#15803d', fontWeight: '600' }}>{item.attended_hours}</td>
+                      <td style={{ color: '#b91c1c', fontWeight: '600' }}>{item.absent_hours}</td>
+                      <td style={{ color: '#b45309', fontWeight: '600' }}>{item.od_hours}</td>
+                      <td>
+                        <strong>{item.percentage}%</strong>
+                      </td>
+                      <td>
+                        {item.percentage >= 75 ? (
+                          <span style={{ color: '#1e3a8a', fontWeight: '600' }}>{item.safe_bunks} classes</span>
+                        ) : (
+                          <span style={{ color: '#b91c1c', fontWeight: '600' }}>Need {item.needed_to_reach_75} consecutive</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`status-pill ${item.percentage >= 75 ? 'status-success' : 'status-danger'}`}>
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Faculty Action: Mark Attendance */}
+        <div className="panel-card">
+          <div className="panel-card-header">
+            <h3 className="panel-card-title">Faculty Portal: Log Class Session Attendance</h3>
+          </div>
+          <div className="panel-card-body">
+            {markMessage && <div className="alert-box alert-success">{markMessage}</div>}
+            <form onSubmit={handleMarkAttendance}>
+              <div className="form-group">
+                <label>Select Course</label>
+                <select
+                  className="form-select"
+                  value={markCourse}
+                  onChange={(e) => setMarkCourse(e.target.value)}
+                >
+                  {list.map((c) => (
+                    <option key={c.course_code} value={c.course_code}>
+                      {c.course_code}: {c.course_title} ({c.percentage}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Session Date</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={markDate}
+                  onChange={(e) => setMarkDate(e.target.value)}
+                  placeholder="e.g. 2026-11-03 or Today"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Student Session Status</label>
+                <div className="role-selector">
+                  <button
+                    type="button"
+                    className={`role-btn ${markAction === 'present' ? 'active' : ''}`}
+                    onClick={() => setMarkAction('present')}
+                  >
+                    Present (+1 Attended)
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-btn ${markAction === 'absent' ? 'active' : ''}`}
+                    onClick={() => setMarkAction('absent')}
+                  >
+                    Absent (+1 Absent)
+                  </button>
+                  <button
+                    type="button"
+                    className={`role-btn ${markAction === 'od' ? 'active' : ''}`}
+                    onClick={() => setMarkAction('od')}
+                  >
+                    On-Duty (+1 OD)
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="btn-primary" disabled={markLoading}>
+                {markLoading ? 'Recording Session...' : 'Submit Session Record'}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Attendance Regulation Guidelines */}
+        <div className="panel-card">
+          <div className="panel-card-header">
+            <h3 className="panel-card-title">Academic Attendance Regulations</h3>
+          </div>
+          <div className="panel-card-body" style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
+            <p style={{ marginBottom: '8px' }}>
+              <strong>1. Minimum Compliance:</strong> Every student must maintain at least <strong>75% attendance</strong> in each registered course to be eligible to sit for the Semester End Examination (SEE).
+            </p>
+            <p style={{ marginBottom: '8px' }}>
+              <strong>2. On-Duty (OD) Provisions:</strong> Formal OD credit is provided for authorized participation in university hackathons, research colloquiums, and inter-university sports championships.
+            </p>
+            <p>
+              <strong>3. Condonation Window:</strong> Shortages between 65% and 74% can be considered only on medical grounds with hospital documentation approved by the Dean of Academic Affairs.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// 2. ATTENDANCE
-export function AttendanceView() {
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ==========================================================
+// 3. ATTENDANCE CALCULATOR MODULE
+// ==========================================================
+export function AttendanceCalculatorView() {
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [totalHours, setTotalHours] = useState(48);
+  const [attendedHours, setAttendedHours] = useState(42);
+  const [odHours, setOdHours] = useState(2);
+  const [targetPercentage, setTargetPercentage] = useState(75);
+  const [simulation, setSimulation] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     apiRequest('/attendance')
-      .then(res => setList(res.attendance || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then(res => {
+        const att = res.attendance || [];
+        setCourses(att);
+        if (att.length > 0) {
+          const first = att[0];
+          setSelectedCourse(first.course_code);
+          setTotalHours(first.total_hours);
+          setAttendedHours(first.attended_hours);
+          setOdHours(first.od_hours || 0);
+          // Initial auto-calc
+          runCalculation(first.total_hours, first.attended_hours, first.od_hours || 0, 75, first.course_title);
+        }
+      })
+      .catch(console.error);
   }, []);
 
-  return (
-    <div className="panel-card">
-      <div className="panel-card-header">
-        <h3 className="panel-card-title">Course Attendance Register</h3>
-        <span className="status-pill status-success">Threshold: 75%</span>
-      </div>
-      <div className="table-responsive">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Course</th>
-              <th>Faculty</th>
-              <th>Attended</th>
-              <th>Total</th>
-              <th>Percentage</th>
-              <th>Safe Bunks Left</th>
-              <th>Eligibility</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan="7">Loading attendance logs...</td></tr>
-            ) : (
-              list.map((item) => (
-                <tr key={item.id}>
-                  <td><strong>{item.course_code}</strong> - {item.course_title}</td>
-                  <td>{item.faculty_name}</td>
-                  <td>{item.attended_hours} hrs</td>
-                  <td>{item.total_hours} hrs</td>
-                  <td><strong>{item.percentage}%</strong></td>
-                  <td>{item.safe_bunks} classes</td>
-                  <td>
-                    <span className={`status-pill ${item.percentage >= 75 ? 'status-success' : 'status-danger'}`}>
-                      {item.percentage >= 75 ? 'Eligible' : 'Shortage'}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+  const handleCourseChange = (e) => {
+    const code = e.target.value;
+    setSelectedCourse(code);
+    const found = courses.find(c => c.course_code === code);
+    if (found) {
+      setTotalHours(found.total_hours);
+      setAttendedHours(found.attended_hours);
+      setOdHours(found.od_hours || 0);
+      runCalculation(found.total_hours, found.attended_hours, found.od_hours || 0, targetPercentage, found.course_title);
+    }
+  };
 
-// 3. ATTENDANCE CALCULATOR
-export function AttendanceCalculatorView() {
-  const [total, setTotal] = useState(48);
-  const [attended, setAttended] = useState(43);
-  const [target, setTarget] = useState(75);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-
-  const calculate = async (e) => {
-    e.preventDefault();
+  const runCalculation = async (total, attended, od, target, courseName) => {
     setError('');
+    setLoading(true);
+
     try {
       const res = await apiRequest('/attendance/calculate', {
         method: 'POST',
         body: JSON.stringify({
           total_hours: parseInt(total, 10),
           attended_hours: parseInt(attended, 10),
-          target_percentage: parseFloat(target)
+          od_hours: parseInt(od, 10),
+          target_percentage: parseFloat(target),
+          course_name: courseName || 'Selected Subject'
         })
       });
-      setResult(res);
+      setSimulation(res);
     } catch (err) {
       setError(err.message);
+      setSimulation(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <div className="panel-card" style={{ maxWidth: '600px' }}>
-      <div className="panel-card-header">
-        <h3 className="panel-card-title">Attendance Target & Bunk Calculator</h3>
-      </div>
-      <div className="panel-card-body">
-        {error && <div className="alert-box alert-danger">{error}</div>}
-        <form onSubmit={calculate}>
-          <div className="form-group">
-            <label>Total Classes Conducted</label>
-            <input
-              type="number"
-              min="1"
-              required
-              className="form-input"
-              value={total}
-              onChange={(e) => setTotal(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Classes Attended</label>
-            <input
-              type="number"
-              min="0"
-              required
-              className="form-input"
-              value={attended}
-              onChange={(e) => setAttended(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Target Minimum Attendance (%)</label>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              required
-              className="form-input"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-            />
-          </div>
-          <button type="submit" className="btn-primary">Compute Projection</button>
-        </form>
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    const found = courses.find(c => c.course_code === selectedCourse);
+    runCalculation(totalHours, attendedHours, odHours, targetPercentage, found?.course_title || 'Subject');
+  };
 
-        {result && (
-          <div style={{ marginTop: '20px', padding: '14px', background: '#f8fafc', border: '1px solid #d1d5db' }}>
-            <div>Current Rate: <strong>{result.current_percentage}%</strong></div>
-            <div style={{ marginTop: '6px' }}>Status: <span className={`status-pill ${result.status === 'Eligible' ? 'status-success' : 'status-danger'}`}>{result.status}</span></div>
-            <p style={{ marginTop: '8px', fontSize: '13px', color: '#1e293b' }}>{result.message}</p>
+  return (
+    <div>
+      <div className="banner-card">
+        <div>
+          <div className="banner-title">Smart Attendance & Safe Bunk Calculator</div>
+          <div className="banner-sub">
+            Simulate future leaves or compute exact recovery sessions needed to meet institutional thresholds.
           </div>
-        )}
+        </div>
+      </div>
+
+      <div className="dashboard-sections-grid">
+        {/* Parameters Form */}
+        <div className="panel-card">
+          <div className="panel-card-header">
+            <h3 className="panel-card-title">Simulation Parameters</h3>
+          </div>
+          <div className="panel-card-body">
+            {error && <div className="alert-box alert-danger">{error}</div>}
+
+            <form onSubmit={handleFormSubmit}>
+              <div className="form-group">
+                <label>Load from Registered Subject (Optional)</label>
+                <select
+                  className="form-select"
+                  value={selectedCourse}
+                  onChange={handleCourseChange}
+                >
+                  <option value="">-- Manual Custom Entry --</option>
+                  {courses.map((c) => (
+                    <option key={c.course_code} value={c.course_code}>
+                      {c.course_code}: {c.course_title} (Current: {c.percentage}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Total Classes Conducted</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  className="form-input"
+                  value={totalHours}
+                  onChange={(e) => setTotalHours(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Classes Attended</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  className="form-input"
+                  value={attendedHours}
+                  onChange={(e) => setAttendedHours(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>On-Duty (OD) Approved Classes</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="form-input"
+                  value={odHours}
+                  onChange={(e) => setOdHours(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Required Compliance Percentage (%)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="0.5"
+                  required
+                  className="form-input"
+                  value={targetPercentage}
+                  onChange={(e) => setTargetPercentage(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'Calculating...' : 'Run Attendance Simulation'}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Real Calculation Results & Projection */}
+        <div className="panel-card">
+          <div className="panel-card-header">
+            <h3 className="panel-card-title">Calculation Outcome & Projections</h3>
+            {simulation && (
+              <span className={`status-pill ${simulation.status === 'Eligible' ? 'status-success' : 'status-danger'}`}>
+                {simulation.current_percentage}% Current
+              </span>
+            )}
+          </div>
+          <div className="panel-card-body">
+            {simulation ? (
+              <div>
+                {/* Result Hero Banner */}
+                <div style={{
+                  padding: '16px',
+                  borderRadius: '4px',
+                  backgroundColor: simulation.status === 'Eligible' ? '#f0fdf4' : '#fef2f2',
+                  border: `1px solid ${simulation.status === 'Eligible' ? '#bbf7d0' : '#fecaca'}`,
+                  marginBottom: '16px'
+                }}>
+                  <div style={{
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    color: simulation.status === 'Eligible' ? '#15803d' : '#b91c1c'
+                  }}>
+                    {simulation.status === 'Eligible' ? (
+                      `${simulation.max_bunks} Safe Bunks Remaining`
+                    ) : (
+                      `Must Attend Next ${simulation.needed_classes} Consecutive Classes`
+                    )}
+                  </div>
+                  <p style={{ marginTop: '8px', fontSize: '13px', color: '#334155', lineHeight: '1.5' }}>
+                    {simulation.message}
+                  </p>
+                </div>
+
+                {/* Mathematical Breakdown Table */}
+                <table className="data-table" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td>Effective Attended (Regular + OD):</td>
+                      <td><strong>{simulation.classes_attended} / {simulation.total_conducted} hrs</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Current Attendance Rate:</td>
+                      <td><strong>{simulation.current_percentage}%</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Required Target Threshold:</td>
+                      <td><strong>{simulation.target_percentage}%</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Projected if you attend the next class:</td>
+                      <td style={{ color: '#15803d' }}>
+                        <strong>{simulation.projected_if_attend_one}%</strong> (+{(simulation.projected_if_attend_one - simulation.current_percentage).toFixed(1)}%)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Projected if you miss the next class:</td>
+                      <td style={{ color: '#b91c1c' }}>
+                        <strong>{simulation.projected_if_miss_one}%</strong> ({(simulation.projected_if_miss_one - simulation.current_percentage).toFixed(1)}%)
+                      </td>
+                    </tr>
+                    {simulation.status === 'Eligible' && simulation.max_bunks > 0 && (
+                      <tr>
+                        <td>Final percentage after taking all {simulation.max_bunks} safe bunks:</td>
+                        <td><strong>{simulation.projected_after_all_bunks}%</strong> (above {simulation.target_percentage}%)</td>
+                      </tr>
+                    )}
+                    {simulation.status !== 'Eligible' && (
+                      <tr>
+                        <td>Final percentage after completing all {simulation.needed_classes} recovery classes:</td>
+                        <td><strong>{simulation.projected_after_recovery}%</strong> (restores eligibility)</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ color: '#64748b', textAlign: 'center', padding: '30px 0' }}>
+                Enter class numbers on the left or choose a course to simulate attendance projections.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// 4. TIMETABLE
+// ==========================================================
+// 4. TIMETABLE MODULE
+// ==========================================================
 export function TimetableView() {
   const [day, setDay] = useState(2);
   const [slots, setSlots] = useState([]);
@@ -219,11 +807,14 @@ export function TimetableView() {
             <button
               key={d}
               type="button"
-              className={`btn-secondary ${day === d ? 'active' : ''}`}
-              style={{ background: day === d ? '#1e3a8a' : '#ffffff', color: day === d ? '#ffffff' : '#1e293b' }}
+              className="btn-secondary"
+              style={{
+                backgroundColor: day === d ? '#1e3a8a' : '#ffffff',
+                color: day === d ? '#ffffff' : '#1e293b'
+              }}
               onClick={() => setDay(d)}
             >
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d - 1]}
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'][d - 1]}
             </button>
           ))}
         </div>
@@ -260,7 +851,9 @@ export function TimetableView() {
   );
 }
 
-// 5. ASSIGNMENTS
+// ==========================================================
+// 5. ASSIGNMENTS MODULE
+// ==========================================================
 export function AssignmentsView() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -272,9 +865,7 @@ export function AssignmentsView() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    loadAssignments();
-  }, []);
+  useEffect(() => { loadAssignments(); }, []);
 
   const handleSubmit = async (id) => {
     try {
@@ -314,7 +905,7 @@ export function AssignmentsView() {
                     <div style={{ fontSize: '11px', color: '#64748b' }}>{a.description}</div>
                   </td>
                   <td>{a.due_date}</td>
-                  <td>{a.max_marks}</td>
+                  <td>{a.max_marks} pts</td>
                   <td>
                     <span className={`status-pill ${a.status === 'Submitted' ? 'status-success' : 'status-warning'}`}>
                       {a.status}
@@ -343,7 +934,9 @@ export function AssignmentsView() {
   );
 }
 
-// 6. NOTES & MATERIALS
+// ==========================================================
+// 6. NOTES & STUDY MATERIALS MODULE
+// ==========================================================
 export function NotesView() {
   const [notes, setNotes] = useState([]);
 
@@ -394,7 +987,9 @@ export function NotesView() {
   );
 }
 
-// 7. EXAMINATIONS
+// ==========================================================
+// 7. EXAMINATIONS MODULE
+// ==========================================================
 export function ExaminationsView() {
   const [exams, setExams] = useState([]);
 
@@ -403,46 +998,46 @@ export function ExaminationsView() {
   }, []);
 
   return (
-    <div>
-      <div className="panel-card">
-        <div className="panel-card-header">
-          <h3 className="panel-card-title">End-Semester Examination Time Table</h3>
-          <button type="button" className="btn-secondary" onClick={() => window.print()}>
-            Print Hall Ticket
-          </button>
-        </div>
-        <div className="table-responsive">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Course</th>
-                <th>Subject Name</th>
-                <th>Exam Date</th>
-                <th>Time Slot</th>
-                <th>Room / Hall</th>
-                <th>Seat Allotment</th>
+    <div className="panel-card">
+      <div className="panel-card-header">
+        <h3 className="panel-card-title">End-Semester Examination Time Table</h3>
+        <button type="button" className="btn-secondary" onClick={() => window.print()}>
+          Print Hall Ticket
+        </button>
+      </div>
+      <div className="table-responsive">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Course</th>
+              <th>Subject Name</th>
+              <th>Exam Date</th>
+              <th>Time Slot</th>
+              <th>Room / Hall</th>
+              <th>Seat Allotment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {exams.map((ex) => (
+              <tr key={ex.id}>
+                <td><strong>{ex.course_code}</strong></td>
+                <td>{ex.course_title}</td>
+                <td>{ex.exam_date}</td>
+                <td>{ex.time_slot}</td>
+                <td>{ex.exam_hall}</td>
+                <td>{ex.seat_number}</td>
               </tr>
-            </thead>
-            <tbody>
-              {exams.map((ex) => (
-                <tr key={ex.id}>
-                  <td><strong>{ex.course_code}</strong></td>
-                  <td>{ex.course_title}</td>
-                  <td>{ex.exam_date}</td>
-                  <td>{ex.time_slot}</td>
-                  <td>{ex.exam_hall}</td>
-                  <td>{ex.seat_number}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-// 8. SGPA & CGPA CALCULATOR
+// ==========================================================
+// 8. SGPA & CGPA CALCULATOR MODULE
+// ==========================================================
 export function GpaCalculatorView() {
   const [courses, setCourses] = useState([
     { name: 'Distributed Systems', credits: 4, grade: 'O' },
@@ -543,7 +1138,9 @@ export function GpaCalculatorView() {
   );
 }
 
-// 9. STUDENT PROFILE
+// ==========================================================
+// 9. STUDENT PROFILE MODULE
+// ==========================================================
 export function StudentProfileView() {
   const [profile, setProfile] = useState(null);
   const [phone, setPhone] = useState('');
@@ -600,17 +1197,15 @@ export function StudentProfileView() {
   );
 }
 
-// 10. PLACEMENTS
+// ==========================================================
+// 10. PLACEMENTS MODULE
+// ==========================================================
 export function PlacementsView() {
   const [drives, setDrives] = useState([]);
 
   useEffect(() => {
     apiRequest('/placements').then(res => setDrives(res.drives || [])).catch(console.error);
   }, []);
-
-  const apply = (id, company) => {
-    alert(`Application submitted for ${company} recruitment drive.`);
-  };
 
   return (
     <div className="panel-card">
@@ -638,7 +1233,7 @@ export function PlacementsView() {
                 <td>{d.min_cgpa}</td>
                 <td>{d.deadline}</td>
                 <td>
-                  <button type="button" className="btn-secondary" onClick={() => apply(d.id, d.company)}>
+                  <button type="button" className="btn-secondary" onClick={() => alert(`Application submitted for ${d.company}.`)}>
                     Apply
                   </button>
                 </td>
@@ -651,7 +1246,9 @@ export function PlacementsView() {
   );
 }
 
-// 11. PROJECTS HUB
+// ==========================================================
+// 11. PROJECTS HUB MODULE
+// ==========================================================
 export function ProjectsView() {
   const [projects, setProjects] = useState([]);
   const [title, setTitle] = useState('');
@@ -731,7 +1328,9 @@ export function ProjectsView() {
   );
 }
 
-// 12. EVENTS
+// ==========================================================
+// 12. EVENTS & CLUBS MODULE
+// ==========================================================
 export function EventsView() {
   const [events, setEvents] = useState([]);
 
@@ -774,17 +1373,15 @@ export function EventsView() {
   );
 }
 
-// 13. LIBRARY
+// ==========================================================
+// 13. LIBRARY MODULE
+// ==========================================================
 export function LibraryView() {
   const [books, setBooks] = useState([]);
 
   useEffect(() => {
     apiRequest('/library').then(res => setBooks(res.borrowed_books || [])).catch(console.error);
   }, []);
-
-  const handleRenew = (title) => {
-    alert(`Loan for "${title}" extended by 14 days.`);
-  };
 
   return (
     <div className="panel-card">
@@ -810,7 +1407,7 @@ export function LibraryView() {
                 <td>{b.due_date}</td>
                 <td>{b.days_left} days</td>
                 <td>
-                  <button type="button" className="btn-secondary" onClick={() => handleRenew(b.title)}>
+                  <button type="button" className="btn-secondary" onClick={() => alert(`Loan for "${b.title}" extended by 14 days.`)}>
                     Renew Loan
                   </button>
                 </td>
@@ -823,7 +1420,9 @@ export function LibraryView() {
   );
 }
 
-// 14. CAMPUS SERVICES
+// ==========================================================
+// 14. CAMPUS SERVICES MODULE
+// ==========================================================
 export function CampusServicesView() {
   const [services, setServices] = useState(null);
 
@@ -856,7 +1455,9 @@ export function CampusServicesView() {
   );
 }
 
-// 15. NOTIFICATIONS
+// ==========================================================
+// 15. NOTIFICATIONS MODULE
+// ==========================================================
 export function NotificationsView() {
   const [notifs, setNotifs] = useState([]);
 
@@ -885,7 +1486,9 @@ export function NotificationsView() {
   );
 }
 
-// 16. PERFORMANCE ANALYTICS
+// ==========================================================
+// 16. PERFORMANCE ANALYTICS MODULE
+// ==========================================================
 export function PerformanceAnalyticsView() {
   const [analytics, setAnalytics] = useState(null);
 
@@ -942,7 +1545,9 @@ export function PerformanceAnalyticsView() {
   );
 }
 
-// 17. FACULTY DOUBT PORTAL
+// ==========================================================
+// 17. FACULTY DOUBT PORTAL MODULE
+// ==========================================================
 export function FacultyDoubtPortalView() {
   const [doubts, setDoubts] = useState([]);
   const [course, setCourse] = useState('CS601');

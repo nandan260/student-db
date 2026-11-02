@@ -1,4 +1,5 @@
 import os
+import math
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from database import get_db, init_db
@@ -8,6 +9,30 @@ app = Flask(__name__, static_folder=FRONTEND_DIST, static_url_path='')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 init_db()
+
+def calculate_grade_and_status(total, external):
+    if total >= 90:
+        grade = 'O'
+    elif total >= 80:
+        grade = 'A+'
+    elif total >= 70:
+        grade = 'A'
+    elif total >= 60:
+        grade = 'B+'
+    elif total >= 55:
+        grade = 'B'
+    elif total >= 50:
+        grade = 'C'
+    elif total >= 40:
+        grade = 'P'
+    else:
+        grade = 'F'
+
+    # Pass if total >= 40 and external exam score >= 18 out of 50
+    status = 'Pass' if (total >= 40 and external >= 18) else 'Fail'
+    return grade, status
+
+GRADE_POINTS = {'O': 10, 'A+': 9, 'A': 8, 'B+': 7, 'B': 6, 'C': 5, 'P': 4, 'F': 0}
 
 # ==========================================================
 # 1. DASHBOARD HOME SUMMARY
@@ -25,10 +50,30 @@ def dashboard_summary():
         'name': 'Alex Kumar',
         'usn': '1MS21CS084',
         'department': 'Computer Science & Engineering',
-        'semester': 6,
-        'overall_attendance': 88.4,
-        'cgpa': 9.12
+        'semester': 6
     }
+
+    # Live attendance calculation
+    cursor.execute("SELECT SUM(attended_hours) as attended, SUM(total_hours) as total, SUM(od_hours) as od FROM attendance")
+    att_agg = cursor.fetchone()
+    if att_agg and att_agg['total'] and att_agg['total'] > 0:
+        overall_attendance = round(((att_agg['attended'] + (att_agg['od'] or 0)) / att_agg['total']) * 100, 1)
+    else:
+        overall_attendance = 88.4
+
+    # Live SGPA calculation for current semester (Sem 6)
+    cursor.execute("SELECT credits, grade FROM academic_marks WHERE semester = 6")
+    sem6_marks = cursor.fetchall()
+    sem6_pts = sum(m['credits'] * GRADE_POINTS.get(m['grade'], 8) for m in sem6_marks)
+    sem6_creds = sum(m['credits'] for m in sem6_marks)
+    current_sgpa = round(sem6_pts / sem6_creds, 2) if sem6_creds > 0 else 9.68
+
+    # Live CGPA across all recorded semesters
+    cursor.execute("SELECT credits, grade FROM academic_marks")
+    all_marks = cursor.fetchall()
+    all_pts = sum(m['credits'] * GRADE_POINTS.get(m['grade'], 8) for m in all_marks)
+    all_creds = sum(m['credits'] for m in all_marks)
+    cgpa = round(all_pts / all_creds, 2) if all_creds > 0 else 9.63
 
     # Upcoming examinations
     cursor.execute("SELECT * FROM examinations ORDER BY exam_date ASC LIMIT 5")
@@ -42,26 +87,6 @@ def dashboard_summary():
     cursor.execute("SELECT * FROM announcements ORDER BY id DESC LIMIT 5")
     announcements = [dict(r) for r in cursor.fetchall()]
 
-    # Attendance aggregation
-    cursor.execute("SELECT SUM(attended_hours) as attended, SUM(total_hours) as total FROM attendance WHERE user_id = 1")
-    att_agg = cursor.fetchone()
-    if att_agg and att_agg['total'] and att_agg['total'] > 0:
-        calculated_att = round((att_agg['attended'] / att_agg['total']) * 100, 1)
-        profile['overall_attendance'] = calculated_att
-
-    # Calculate semester SGPA from marks
-    cursor.execute("SELECT credits, total_marks, grade FROM academic_marks WHERE user_id = 1 AND semester = ?", (profile['semester'],))
-    marks_rows = cursor.fetchall()
-    grade_pts = {'O': 10, 'A+': 9, 'A': 8, 'B+': 7, 'B': 6, 'C': 5, 'P': 4, 'F': 0}
-    total_pts = 0
-    total_cr = 0
-    for m in marks_rows:
-        cr = m['credits']
-        pts = grade_pts.get(m['grade'], 8)
-        total_pts += (cr * pts)
-        total_cr += cr
-    current_sgpa = round(total_pts / total_cr, 2) if total_cr > 0 else profile.get('cgpa', 9.12)
-
     conn.close()
 
     return jsonify({
@@ -70,9 +95,9 @@ def dashboard_summary():
             'usn': profile['usn'],
             'department': profile['department'],
             'semester': profile['semester'],
-            'overall_attendance': profile['overall_attendance'],
+            'overall_attendance': overall_attendance,
             'current_sgpa': current_sgpa,
-            'cgpa': profile.get('cgpa', 9.12)
+            'cgpa': cgpa
         },
         'upcoming_examinations': exams,
         'pending_assignments': pending_assignments,
@@ -80,70 +105,339 @@ def dashboard_summary():
     })
 
 # ==========================================================
-# 2. MODULE APIS
+# 2. MODULE 1: ACADEMIC PERFORMANCE & MARKS
 # ==========================================================
 
-# Academic Performance
 @app.route('/api/academics/performance', methods=['GET'])
 def get_performance():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM academic_marks ORDER BY semester DESC, course_code ASC")
-    rows = [dict(r) for r in cursor.fetchall()]
-    conn.close()
-    return jsonify({'marks': rows})
 
-# Attendance & Attendance Calculator
+    # Get available semesters
+    cursor.execute("SELECT DISTINCT semester FROM academic_marks ORDER BY semester DESC")
+    available_semesters = [r['semester'] for r in cursor.fetchall()]
+    if not available_semesters:
+        available_semesters = [6, 5]
+
+    selected_sem = request.args.get('semester')
+    if selected_sem:
+        selected_sem = int(selected_sem)
+    else:
+        selected_sem = available_semesters[0]
+
+    # Semester specific marks
+    cursor.execute("""
+        SELECT id, course_code, course_title, credits, internal_marks, lab_marks, external_marks, total_marks, grade, status
+        FROM academic_marks
+        WHERE semester = ?
+        ORDER BY course_code ASC
+    """, (selected_sem,))
+    marks_rows = [dict(r) for r in cursor.fetchall()]
+
+    # Semester SGPA
+    sem_pts = sum(m['credits'] * GRADE_POINTS.get(m['grade'], 0) for m in marks_rows)
+    sem_creds = sum(m['credits'] for m in marks_rows)
+    sgpa = round(sem_pts / sem_creds, 2) if sem_creds > 0 else 0.0
+
+    # Overall Cumulative CGPA across all semesters
+    cursor.execute("SELECT credits, grade FROM academic_marks")
+    all_marks = cursor.fetchall()
+    cum_pts = sum(m['credits'] * GRADE_POINTS.get(m['grade'], 0) for m in all_marks)
+    cum_creds = sum(m['credits'] for m in all_marks)
+    cgpa = round(cum_pts / cum_creds, 2) if cum_creds > 0 else 0.0
+
+    total_subjects = len(marks_rows)
+    passed_subjects = sum(1 for m in marks_rows if m['status'] == 'Pass')
+    failed_subjects = total_subjects - passed_subjects
+
+    conn.close()
+
+    return jsonify({
+        'selected_semester': selected_sem,
+        'available_semesters': available_semesters,
+        'marks': marks_rows,
+        'sgpa': sgpa,
+        'cgpa': cgpa,
+        'total_credits': sem_creds,
+        'total_subjects': total_subjects,
+        'passed_subjects': passed_subjects,
+        'failed_subjects': failed_subjects,
+        'result_status': 'PASS' if failed_subjects == 0 else 'FAIL'
+    })
+
+@app.route('/api/academics/marks/<int:mark_id>', methods=['PUT'])
+def update_marks(mark_id):
+    data = request.get_json() or {}
+    internal = int(data.get('internal_marks', 0))
+    lab = int(data.get('lab_marks', 0))
+    external = int(data.get('external_marks', 0))
+
+    if internal < 0 or internal > 30:
+        return jsonify({'error': 'Internal marks must be between 0 and 30.'}), 400
+    if lab < 0 or lab > 20:
+        return jsonify({'error': 'Lab marks must be between 0 and 20.'}), 400
+    if external < 0 or external > 50:
+        return jsonify({'error': 'External exam marks must be between 0 and 50.'}), 400
+
+    total = internal + lab + external
+    grade, status = calculate_grade_and_status(total, external)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE academic_marks
+        SET internal_marks = ?, lab_marks = ?, external_marks = ?, total_marks = ?, grade = ?, status = ?
+        WHERE id = ?
+    """, (internal, lab, external, total, grade, status, mark_id))
+    conn.commit()
+
+    cursor.execute("SELECT * FROM academic_marks WHERE id = ?", (mark_id,))
+    updated_mark = dict(cursor.fetchone())
+    conn.close()
+
+    return jsonify({
+        'message': f'Marks updated for {updated_mark["course_code"]}. Total: {total}/100, Grade: {grade}, Status: {status}.',
+        'mark': updated_mark
+    })
+
+# ==========================================================
+# 3. MODULE 2: SMART ATTENDANCE
+# ==========================================================
+
 @app.route('/api/attendance', methods=['GET'])
 def get_attendance():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM attendance ORDER BY course_code ASC")
-    rows = []
-    for r in cursor.fetchall():
+
+    cursor.execute("""
+        SELECT id, course_code, course_title, faculty_name, attended_hours, total_hours, od_hours
+        FROM attendance
+        ORDER BY course_code ASC
+    """)
+    raw_rows = cursor.fetchall()
+
+    attendance_list = []
+    total_conducted = 0
+    total_attended = 0
+    total_od = 0
+    total_absent = 0
+
+    for r in raw_rows:
         item = dict(r)
+        attended = item['attended_hours']
         total = item['total_hours']
-        att = item['attended_hours']
-        item['percentage'] = round((att / total) * 100, 1) if total > 0 else 0.0
-        if item['percentage'] >= 75.0:
-            item['safe_bunks'] = max(0, int((att / 0.75) - total))
-            item['needed_to_reach_75'] = 0
+        od = item['od_hours'] or 0
+        absent = max(0, total - attended - od)
+
+        pct = round(((attended + od) / total) * 100, 1) if total > 0 else 0.0
+
+        if pct >= 75.0:
+            status = 'Eligible'
+            # Safe bunks: floor(((attended + od) / 0.75) - total)
+            safe_bunks = max(0, int(((attended + od) / 0.75) - total))
+            needed = 0
         else:
-            item['safe_bunks'] = 0
-            item['needed_to_reach_75'] = int(((0.75 * total) - att) / 0.25) + 1
-        rows.append(item)
+            status = 'Shortage'
+            safe_bunks = 0
+            # Classes needed: ceil((0.75 * total - (attended + od)) / 0.25)
+            needed = max(1, math.ceil((0.75 * total - (attended + od)) / 0.25))
+
+        item['absent_hours'] = absent
+        item['percentage'] = pct
+        item['status'] = status
+        item['safe_bunks'] = safe_bunks
+        item['needed_to_reach_75'] = needed
+
+        total_conducted += total
+        total_attended += attended
+        total_od += od
+        total_absent += absent
+
+        attendance_list.append(item)
+
+    overall_pct = round(((total_attended + total_od) / total_conducted) * 100, 1) if total_conducted > 0 else 0.0
+
     conn.close()
-    return jsonify({'attendance': rows})
+
+    return jsonify({
+        'overall_summary': {
+            'total_conducted': total_conducted,
+            'total_attended': total_attended,
+            'total_absent': total_absent,
+            'total_od': total_od,
+            'overall_percentage': overall_pct,
+            'overall_status': 'Eligible' if overall_pct >= 75.0 else 'Shortage Warning'
+        },
+        'attendance': attendance_list
+    })
+
+@app.route('/api/attendance/mark', methods=['POST'])
+def mark_attendance():
+    data = request.get_json() or {}
+    course_code = data.get('course_code', '').strip().upper()
+    action = data.get('action', 'present').strip().lower()  # 'present', 'absent', 'od'
+    date_str = data.get('date', 'Today')
+
+    if not course_code:
+        return jsonify({'error': 'Course code is required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM attendance WHERE course_code = ?", (course_code,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': f'Course {course_code} not found in attendance register.'}), 404
+
+    attended = row['attended_hours']
+    total = row['total_hours'] + 1
+    od = row['od_hours'] or 0
+
+    if action == 'present':
+        attended += 1
+    elif action == 'od':
+        od += 1
+    # absent increments only total
+
+    cursor.execute("""
+        UPDATE attendance
+        SET attended_hours = ?, total_hours = ?, od_hours = ?
+        WHERE course_code = ?
+    """, (attended, total, od, course_code))
+
+    # Log record
+    cursor.execute("""
+        INSERT INTO attendance_logs (course_code, date, status, marked_by)
+        VALUES (?, ?, ?, 'Faculty Portal')
+    """, (course_code, date_str, action))
+
+    conn.commit()
+    conn.close()
+
+    new_pct = round(((attended + od) / total) * 100, 1)
+    return jsonify({
+        'message': f'Attendance marked as "{action.upper()}" for {course_code}. Updated attendance: {new_pct}%.',
+        'updated_course': {
+            'course_code': course_code,
+            'attended': attended,
+            'total': total,
+            'od': od,
+            'percentage': new_pct
+        }
+    })
+
+@app.route('/api/attendance/<int:attendance_id>', methods=['PUT'])
+def edit_attendance(attendance_id):
+    data = request.get_json() or {}
+    attended = int(data.get('attended_hours', 0))
+    total = int(data.get('total_hours', 0))
+    od = int(data.get('od_hours', 0))
+
+    if total < 0 or attended < 0 or od < 0:
+        return jsonify({'error': 'Hours cannot be negative.'}), 400
+    if attended + od > total:
+        return jsonify({'error': 'Attended + OD hours cannot exceed total hours conducted.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE attendance
+        SET attended_hours = ?, total_hours = ?, od_hours = ?
+        WHERE id = ?
+    """, (attended, total, od, attendance_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'message': 'Attendance record adjusted successfully.'})
+
+# ==========================================================
+# 4. MODULE 3: ATTENDANCE CALCULATOR
+# ==========================================================
 
 @app.route('/api/attendance/calculate', methods=['POST'])
 def calculate_attendance():
     data = request.get_json() or {}
-    total = int(data.get('total_hours', 1))
+    total = int(data.get('total_hours', 0))
     attended = int(data.get('attended_hours', 0))
+    od = int(data.get('od_hours', 0))
     target = float(data.get('target_percentage', 75.0))
+    course_name = data.get('course_name', 'Selected Subject')
 
-    if total <= 0 or attended < 0 or attended > total:
-        return jsonify({'error': 'Invalid hours entered.'}), 400
+    # Edge cases
+    if total < 0 or attended < 0 or od < 0:
+        return jsonify({'error': 'Class hours cannot be negative values.'}), 400
 
-    current_rate = round((attended / total) * 100, 1)
+    if target <= 0 or target > 100:
+        return jsonify({'error': 'Required attendance target must be between 1% and 100%.'}), 400
+
+    effective_attended = attended + od
+
+    if effective_attended > total:
+        return jsonify({'error': f'Classes attended ({effective_attended}) cannot exceed total classes conducted ({total}).'}), 400
+
+    if total == 0:
+        return jsonify({
+            'current_percentage': 0.0,
+            'status': 'No Sessions',
+            'max_bunks': 0,
+            'needed_classes': 0,
+            'projected_next_attended': 100.0,
+            'projected_next_bunk': 0.0,
+            'message': 'No classes conducted yet for this course. Start attending to establish your percentage.'
+        })
+
+    current_rate = round((effective_attended / total) * 100, 1)
     target_fraction = target / 100.0
 
+    # Projected attendance simulations
+    proj_if_attend_next = round(((effective_attended + 1) / (total + 1)) * 100, 1)
+    proj_if_miss_next = round((effective_attended / (total + 1)) * 100, 1)
+
     if current_rate >= target:
-        max_bunks = int((attended / target_fraction) - total)
+        # Safe bunks: (effective_attended) / (total + x) >= target_fraction
+        # x <= (effective_attended / target_fraction) - total
+        max_bunks = max(0, int((effective_attended / target_fraction) - total))
+        proj_after_bunks = round((effective_attended / (total + max_bunks)) * 100, 1) if max_bunks > 0 else current_rate
+
         return jsonify({
+            'course_name': course_name,
+            'total_conducted': total,
+            'classes_attended': effective_attended,
+            'target_percentage': target,
             'current_percentage': current_rate,
             'status': 'Eligible',
             'max_bunks': max_bunks,
-            'message': f'You are above {target}%. You can safely miss up to {max_bunks} upcoming classes.'
+            'needed_classes': 0,
+            'projected_if_miss_one': proj_if_miss_next,
+            'projected_if_attend_one': proj_if_attend_next,
+            'projected_after_all_bunks': proj_after_bunks,
+            'message': f'You are safely above your {target}% target ({current_rate}%). You can miss up to {max_bunks} consecutive classes without falling below {target}%.'
         })
     else:
-        needed = int(((target_fraction * total) - attended) / (1 - target_fraction)) + 1
+        # Needed: (effective_attended + y) / (total + y) >= target_fraction
+        # y >= (target_fraction * total - effective_attended) / (1 - target_fraction)
+        needed = max(1, math.ceil((target_fraction * total - effective_attended) / (1.0 - target_fraction)))
+        proj_after_recovery = round(((effective_attended + needed) / (total + needed)) * 100, 1)
+
         return jsonify({
+            'course_name': course_name,
+            'total_conducted': total,
+            'classes_attended': effective_attended,
+            'target_percentage': target,
             'current_percentage': current_rate,
             'status': 'Shortage',
+            'max_bunks': 0,
             'needed_classes': needed,
-            'message': f'Attendance shortage! You must attend the next {needed} consecutive classes.'
+            'projected_if_miss_one': proj_if_miss_next,
+            'projected_if_attend_one': proj_if_attend_next,
+            'projected_after_recovery': proj_after_recovery,
+            'message': f'Attendance shortage alert ({current_rate}% < {target}%). You must attend the next {needed} consecutive classes without any absence to restore eligibility.'
         })
+
+# ==========================================================
+# 5. OTHER MODULE APIS
+# ==========================================================
 
 # Timetable
 @app.route('/api/timetable', methods=['GET'])
@@ -201,14 +495,13 @@ def get_examinations():
 def calculate_gpa():
     data = request.get_json() or {}
     courses = data.get('courses', [])
-    grade_map = {'O': 10, 'A+': 9, 'A': 8, 'B+': 7, 'B': 6, 'C': 5, 'P': 4, 'F': 0}
     total_pts = 0
     total_credits = 0
 
     for c in courses:
         credits = int(c.get('credits', 3))
         grade = c.get('grade', 'A').strip().upper()
-        pts = grade_map.get(grade, 8)
+        pts = GRADE_POINTS.get(grade, 8)
         total_pts += (credits * pts)
         total_credits += credits
 
