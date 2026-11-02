@@ -1,0 +1,262 @@
+import sqlite3
+import os
+from werkzeug.security import generate_password_hash
+
+DB_PATH = os.path.join(os.path.dirname(__file__), 'student_portal.db')
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+def init_db():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.executescript("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('student', 'faculty', 'admin')),
+        name TEXT NOT NULL,
+        identifier TEXT NOT NULL,
+        department TEXT NOT NULL,
+        semester INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS student_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE NOT NULL,
+        usn TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        section TEXT DEFAULT 'A',
+        cgpa REAL DEFAULT 0.0,
+        overall_attendance REAL DEFAULT 0.0,
+        email TEXT NOT NULL,
+        phone TEXT DEFAULT '',
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS examinations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_code TEXT NOT NULL,
+        course_title TEXT NOT NULL,
+        exam_date TEXT NOT NULL,
+        time_slot TEXT NOT NULL,
+        exam_hall TEXT NOT NULL,
+        seat_number TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_code TEXT NOT NULL,
+        course_title TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        due_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Pending',
+        max_marks INTEGER DEFAULT 20,
+        obtained_marks INTEGER DEFAULT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS announcements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        department TEXT NOT NULL,
+        content TEXT NOT NULL,
+        published_date TEXT NOT NULL,
+        priority TEXT DEFAULT 'Normal'
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_marks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        semester INTEGER NOT NULL,
+        course_code TEXT NOT NULL,
+        course_title TEXT NOT NULL,
+        credits INTEGER NOT NULL,
+        internal_marks TEXT NOT NULL,
+        lab_marks TEXT NOT NULL,
+        external_marks TEXT NOT NULL,
+        total_marks INTEGER NOT NULL,
+        grade TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Pass',
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS attendance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        course_code TEXT NOT NULL,
+        course_title TEXT NOT NULL,
+        attended_hours INTEGER NOT NULL,
+        total_hours INTEGER NOT NULL,
+        od_hours INTEGER DEFAULT 0,
+        faculty_name TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS timetable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day_of_week INTEGER NOT NULL,
+        time_slot TEXT NOT NULL,
+        course_code TEXT NOT NULL,
+        course_title TEXT NOT NULL,
+        room TEXT NOT NULL,
+        faculty_name TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
+    conn.commit()
+
+    # Check if seed user exists
+    cursor.execute("SELECT COUNT(*) FROM users")
+    count = cursor.fetchone()[0]
+
+    if count == 0:
+        seed_data(conn)
+
+    conn.close()
+
+def seed_data(conn):
+    cursor = conn.cursor()
+
+    # 1. Default Users (Student, Faculty, Admin)
+    # Password for student: student123
+    # Password for faculty: faculty123
+    # Password for admin: admin123
+    student_pwd = generate_password_hash("student123")
+    faculty_pwd = generate_password_hash("faculty123")
+    admin_pwd = generate_password_hash("admin123")
+
+    cursor.execute("""
+    INSERT INTO users (email, password_hash, role, name, identifier, department, semester)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, ("student@college.edu", student_pwd, "student", "Alex Kumar", "1MS21CS084", "Computer Science & Engineering", 6))
+    student_id = cursor.lastrowid
+
+    cursor.execute("""
+    INSERT INTO users (email, password_hash, role, name, identifier, department, semester)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, ("faculty@college.edu", faculty_pwd, "faculty", "Dr. K. V. Sharma", "EMP-CS104", "Computer Science & Engineering", 0))
+
+    cursor.execute("""
+    INSERT INTO users (email, password_hash, role, name, identifier, department, semester)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, ("admin@college.edu", admin_pwd, "admin", "Registrar Admin", "ADM-001", "Administration", 0))
+
+    # 2. Student Profile
+    cursor.execute("""
+    INSERT INTO student_profiles (user_id, usn, name, department, semester, section, cgpa, overall_attendance, email, phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (student_id, "1MS21CS084", "Alex Kumar", "Computer Science & Engineering", 6, "B", 9.12, 88.4, "student@college.edu", "+91 98765 43210"))
+
+    # 3. Upcoming Examinations
+    exams = [
+        ("CS601", "Distributed Systems", "2026-11-20", "09:30 AM - 12:30 PM", "Hall 401", "Row D - 14"),
+        ("CS602", "Machine Learning", "2026-11-23", "09:30 AM - 12:30 PM", "Hall 401", "Row D - 14"),
+        ("CS603", "Compiler Design", "2026-11-26", "09:30 AM - 12:30 PM", "Hall 305", "Row B - 08"),
+        ("CS604", "Cloud Architecture", "2026-11-29", "09:30 AM - 12:30 PM", "Hall 305", "Row B - 08")
+    ]
+    cursor.executemany("""
+    INSERT INTO examinations (course_code, course_title, exam_date, time_slot, exam_hall, seat_number)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, exams)
+
+    # 4. Pending & Active Assignments
+    assignments = [
+        ("CS601", "Distributed Systems", "Raft Consensus Protocol Implementation", "Implement leader election and log replication logic.", "Tomorrow, 11:59 PM", "Pending", 25, None),
+        ("CS602", "Machine Learning", "CNN Architecture Benchmarking on CIFAR-10", "Evaluate accuracy and loss curves for ResNet-18 vs MobileNet.", "2026-11-08", "Pending", 30, None),
+        ("CS603", "Compiler Design", "LR(1) Parser Table Generator", "Write lexer and grammar productions for expression evaluator.", "2026-11-12", "Pending", 20, None),
+        ("CS604", "Cloud Architecture", "Terraform Multi-Tier AWS Infrastructure", "VPC peering and ECS task definitions.", "2026-10-28", "Submitted", 25, 24)
+    ]
+    cursor.executemany("""
+    INSERT INTO assignments (course_code, course_title, title, description, due_date, status, max_marks, obtained_marks)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, assignments)
+
+    # 5. Recent Announcements
+    announcements = [
+        ("End-Semester Theory Exam Schedule Released", "Office of Controller of Examinations", "Theory examination schedules for semesters 4, 6 and 8 are published. Download hall tickets from the examination tab.", "Today, 10:00 AM", "High"),
+        ("Campus Placement Drive: Microsoft Solutions Open", "Career & Placement Cell", "Eligible students with CGPA >= 8.0 can register for the campus technical interview round before cutoff date.", "Yesterday, 04:30 PM", "High"),
+        ("Library Book Return Notice (Autumn Cycle)", "Central University Library", "All textbooks borrowed prior to October 15 must be renewed or returned to avoid overdue charges.", "2026-10-31", "Normal")
+    ]
+    cursor.executemany("""
+    INSERT INTO announcements (title, department, content, published_date, priority)
+    VALUES (?, ?, ?, ?, ?)
+    """, announcements)
+
+    # 6. Academic Marks
+    marks = [
+        (student_id, 6, "CS601", "Distributed Systems", 4, "28/30", "19/20", "45/50", 92, "O", "Pass"),
+        (student_id, 6, "CS602", "Machine Learning", 4, "27/30", "20/20", "43/50", 90, "O", "Pass"),
+        (student_id, 6, "CS603", "Compiler Design", 4, "25/30", "18/20", "41/50", 84, "A+", "Pass"),
+        (student_id, 6, "CS604", "Cloud Architecture", 3, "26/30", "19/20", "44/50", 89, "A+", "Pass"),
+        (student_id, 6, "CS605", "Information Security", 3, "29/30", "19/20", "46/50", 94, "O", "Pass"),
+        (student_id, 6, "CS606L", "Capstone Phase-I", 4, "48/50", "47/50", "--", 95, "O", "Pass")
+    ]
+    cursor.executemany("""
+    INSERT INTO academic_marks (user_id, semester, course_code, course_title, credits, internal_marks, lab_marks, external_marks, total_marks, grade, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, marks)
+
+    # 7. Attendance
+    attendance_data = [
+        (student_id, "CS601", "Distributed Systems", 42, 48, 2, "Dr. Ramesh Rao"),
+        (student_id, "CS602", "Machine Learning", 38, 44, 2, "Prof. Ananya Sen"),
+        (student_id, "CS603", "Compiler Design", 44, 48, 2, "Dr. K. V. Sharma"),
+        (student_id, "CS604", "Cloud Architecture", 35, 44, 2, "Prof. Vikram Hegde"),
+        (student_id, "CS605", "Information Security", 41, 48, 2, "Dr. Priya Nambiar"),
+        (student_id, "CS606L", "Capstone Phase-I", 28, 40, 4, "Dr. Ramesh Rao")
+    ]
+    cursor.executemany("""
+    INSERT INTO attendance (user_id, course_code, course_title, attended_hours, total_hours, od_hours, faculty_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, attendance_data)
+
+    # 8. Timetable
+    timetable_data = [
+        (1, "09:00 AM - 10:00 AM", "CS601", "Distributed Systems", "LH-302", "Dr. Ramesh Rao"),
+        (1, "10:00 AM - 11:00 AM", "CS602", "Machine Learning", "LH-302", "Prof. Ananya Sen"),
+        (1, "11:15 AM - 01:15 PM", "CS606L", "Machine Learning Lab", "Lab 4", "Prof. Ananya Sen"),
+        (2, "09:00 AM - 10:00 AM", "CS603", "Compiler Design", "LH-302", "Dr. K. V. Sharma"),
+        (2, "10:00 AM - 11:00 AM", "CS605", "Information Security", "LH-302", "Dr. Priya Nambiar"),
+        (2, "11:15 AM - 12:15 PM", "CS601", "Distributed Systems", "LH-302", "Dr. Ramesh Rao"),
+        (2, "02:00 PM - 04:00 PM", "CS606L", "Capstone Project Studio", "Room 408", "Dr. Ramesh Rao"),
+        (3, "09:00 AM - 10:00 AM", "CS602", "Machine Learning", "LH-302", "Prof. Ananya Sen"),
+        (3, "10:00 AM - 11:00 AM", "CS604", "Cloud Architecture", "LH-302", "Prof. Vikram Hegde"),
+        (4, "09:00 AM - 10:00 AM", "CS605", "Information Security", "LH-302", "Dr. Priya Nambiar"),
+        (5, "09:00 AM - 10:00 AM", "CS604", "Cloud Architecture", "LH-302", "Prof. Vikram Hegde")
+    ]
+    cursor.executemany("""
+    INSERT INTO timetable (day_of_week, time_slot, course_code, course_title, room, faculty_name)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, timetable_data)
+
+    conn.commit()
+
+if __name__ == '__main__':
+    init_db()
+    print("Database initialized and sample data seeded.")
