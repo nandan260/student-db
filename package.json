@@ -1,0 +1,19 @@
+{
+  "name": "apex-student-portal-backend",
+  "version": "1.0.0",
+  "description": "Production PostgreSQL + Express REST API backend for Apex Student Dashboard",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node seed.js",
+    "db:init": "node -e \"require('./db').initDb()\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "pg": "^8.13.1"
+  }
+}

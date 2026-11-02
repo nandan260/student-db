@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student DB Dashboard | All-in-One Campus Portal</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+  <div class="app-container">
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <span class="brand-title">STUDENT DB</span>
+          <span class="brand-sub">CAMPUS PORTAL v3.2</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu" id="navMenu">
+        <div class="nav-section-title">MAIN</div>
+        <button class="nav-link active" data-view="view-overview">
+          <span class="icon">🏠</span>
+          <span class="label">Overview</span>
+        </button>
+
+        <div class="nav-section-title">ACADEMICS</div>
+        <button class="nav-link" data-view="view-performance">
+          <span class="icon">📊</span>
+          <span class="label">1. Marks & Performance</span>
+        </button>
+        <button class="nav-link" data-view="view-attendance">
+          <span class="icon">📅</span>
+          <span class="label">2. Smart Attendance</span>
+        </button>
+        <button class="nav-link" data-view="view-att-calc">
+          <span class="icon">🧮</span>
+          <span class="label">3. Bunk Calculator</span>
+        </button>
+        <button class="nav-link" data-view="view-timetable">
+          <span class="icon">🕒</span>
+          <span class="label">4. Timetable</span>
+        </button>
+        <button class="nav-link" data-view="view-assignments">
+          <span class="icon">📝</span>
+          <span class="label">5. Assignments</span>
+          <span class="nav-badge" id="badge-pending-assignments">3</span>
+        </button>
+        <button class="nav-link" data-view="view-notes">
+          <span class="icon">📚</span>
+          <span class="label">6. Notes & Materials</span>
+        </button>
+        <button class="nav-link" data-view="view-exams">
+          <span class="icon">🎓</span>
+          <span class="label">7. Examination Portal</span>
+        </button>
+        <button class="nav-link" data-view="view-gpa-calc">
+          <span class="icon">📐</span>
+          <span class="label">8. SGPA/CGPA Calc</span>
+        </button>
+
+        <div class="nav-section-title">CAREER & RESEARCH</div>
+        <button class="nav-link" data-view="view-placements">
+          <span class="icon">💼</span>
+          <span class="label">10. Placement & Career</span>
+        </button>
+        <button class="nav-link" data-view="view-projects">
+          <span class="icon">🚀</span>
+          <span class="label">11. Projects Hub</span>
+        </button>
+        <button class="nav-link" data-view="view-events">
+          <span class="icon">🏆</span>
+          <span class="label">12. Events & Clubs</span>
+        </button>
+
+        <div class="nav-section-title">CAMPUS & LIFE</div>
+        <button class="nav-link" data-view="view-library">
+          <span class="icon">📖</span>
+          <span class="label">13. Library Portal</span>
+        </button>
+        <button class="nav-link" data-view="view-services">
+          <span class="icon">🚌</span>
+          <span class="label">14. Campus Services</span>
+        </button>
+
+        <div class="nav-section-title">COMMUNICATION & SUPPORT</div>
+        <button class="nav-link" data-view="view-comms">
+          <span class="icon">📢</span>
+          <span class="label">15. Announcements</span>
+        </button>
+        <button class="nav-link" data-view="view-analytics">
+          <span class="icon">📈</span>
+          <span class="label">16. Performance Analytics</span>
+        </button>
+        <button class="nav-link" data-view="view-doubts">
+          <span class="icon">💡</span>
+          <span class="label">17. Faculty Doubt Portal</span>
+        </button>
+        <button class="nav-link" data-view="view-profile">
+          <span class="icon">🪪</span>
+          <span class="label">9. Profile & Digital ID</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="mini-profile" id="openProfileQuick">
+          <div class="avatar">AK</div>
+          <div class="mini-meta">
+            <span class="mini-name">Alex Kumar</span>
+            <span class="mini-usn">1MS21CS084</span>
+          </div>
+          <span class="status-indicator online"></span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT WRAPPER -->
+    <main class="main-content">
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle-btn" id="menuToggle" aria-label="Toggle menu">☰</button>
+          <div class="current-view-title" id="currentViewTitle">Overview Dashboard</div>
+        </div>
+
+        <div class="topbar-search">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="globalSearch" placeholder="Search modules, courses, assignments, faculty...">
+        </div>
+
+        <div class="topbar-actions">
+          <div class="stat-pill att-stat">
+            <span class="pill-dot green"></span>
+            <span class="pill-label">Att:</span>
+            <strong id="headerAttRate">88.4%</strong>
+          </div>
+          <div class="stat-pill gpa-stat">
+            <span class="pill-dot blue"></span>
+            <span class="pill-label">CGPA:</span>
+            <strong id="headerCgpa">9.12</strong>
+          </div>
+
+          <div class="notification-wrapper">
+            <button class="icon-btn" id="notifBellBtn" aria-label="Notifications">
+              🔔
+              <span class="badge-dot"></span>
+            </button>
+            <div class="notification-dropdown" id="notifDropdown">
+              <div class="dropdown-header">
+                <span>Recent Notifications</span>
+                <span class="badge-tag">3 New</span>
+              </div>
+              <ul class="dropdown-list" id="notifList">
+                <!-- injected via js -->
+              </ul>
+            </div>
+          </div>
+
+          <button class="id-card-btn" id="openDigitalIdModal">
+            <span>🪪 Digital ID</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- SCROLLABLE VIEW CANVAS -->
+      <div class="content-scroll">
+
+        <!-- 0. OVERVIEW HUB -->
+        <section id="view-overview" class="view-panel active">
+          <div class="welcome-banner">
+            <div class="welcome-text">
+              <h2>Welcome back, Alex Kumar 👋</h2>
+              <p>Semester 6 • B.Tech Computer Science & Engineering • Section B</p>
+            </div>
+            <div class="welcome-stats">
+              <div class="quick-kpi">
+                <span class="kpi-val">9.12</span>
+                <span class="kpi-lbl">Current CGPA</span>
+              </div>
+              <div class="quick-kpi">
+                <span class="kpi-val">88.4%</span>
+                <span class="kpi-lbl">Overall Attendance</span>
+              </div>
+              <div class="quick-kpi">
+                <span class="kpi-val">3</span>
+                <span class="kpi-lbl">Active Deadlines</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- QUICK SHORTCUT TILES -->
+          <div class="hub-grid">
+            <div class="hub-card" data-goto="view-performance">
+              <div class="hub-icon">📊</div>
+              <div class="hub-body">
+                <h3>Academic Performance</h3>
+                <p>View S1-S6 grades, internal/external split & transcripts</p>
+                <span class="link-label">View Grades →</span>
+              </div>
+            </div>
+
+            <div class="hub-card" data-goto="view-attendance">
+              <div class="hub-icon">📅</div>
+              <div class="hub-body">
+                <h3>Smart Attendance</h3>
+                <p>88.4% safe. 6 courses above 85% requirement.</p>
+                <span class="link-label">Check Logs →</span>
+              </div>
+            </div>
+
+            <div class="hub-card" data-goto="view-att-calc">
+              <div class="hub-icon">🧮</div>
+              <div class="hub-body">
+                <h3>Bunk & Target Calculator</h3>
+                <p>Calculate safe leaves or recovery classes needed</p>
+                <span class="link-label">Run Calculator →</span>
+              </div>
+            </div>
+
+            <div class="hub-card" data-goto="view-timetable">
+              <div class="hub-icon">🕒</div>
+              <div class="hub-body">
+                <h3>Today's Schedule</h3>
+                <p>Next: Distributed Systems @ LH-302 (11:15 AM)</p>
+                <span class="link-label">Open Timetable →</span>
+              </div>
+            </div>
+
+            <div class="hub-card" data-goto="view-assignments">
+              <div class="hub-icon">📝</div>
+              <div class="hub-body">
+                <h3>Assignment Tracker</h3>
+                <p>2 submissions due within 48 hours</p>
+                <span class="link-label">Track Submissions →</span>
+              </div>
+            </div>
+
+            <div class="hub-card" data-goto="view-exams">
+              <div class="hub-icon">🎓</div>
+              <div class="hub-body">
+                <h3>Examinations & Hall Ticket</h3>
+                <p>End-Sem Hall ticket released. Verify venue details.</p>
+                <span class="link-label">Download Admit Card →</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-split-row">
+            <!-- CURRENT DAY TIMETABLE SNIPPET -->
+            <div class="card snippet-card">
+              <div class="card-header">
+                <h3>Today's Classes</h3>
+                <span class="badge-live">LIVE</span>
+              </div>
+              <div class="card-body">
+                <div class="mini-schedule-list" id="miniScheduleList">
+                  <!-- JS Injected -->
+                </div>
+              </div>
+            </div>
+
+            <!-- RECENT ALERTS SNIPPET -->
+            <div class="card snippet-card">
+              <div class="card-header">
+                <h3>Urgent Notices</h3>
+                <button class="btn-text" data-goto="view-comms">See All</button>
+              </div>
+              <div class="card-body">
+                <div class="mini-notice-list" id="miniNoticeList">
+                  <!-- JS Injected -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1. ACADEMIC PERFORMANCE & MARKS -->
+        <section id="view-performance" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>1. Academic Performance & Marks</h2>
+              <p>Internal assessments, end-semester evaluations, and cumulative transcript</p>
+            </div>
+            <div class="filter-group">
+              <label>Semester:</label>
+              <select id="perfSemSelect" class="form-select">
+                <option value="6">Semester 6 (Current)</option>
+                <option value="5">Semester 5 (SGPA: 9.24)</option>
+                <option value="4">Semester 4 (SGPA: 9.08)</option>
+                <option value="3">Semester 3 (SGPA: 8.95)</option>
+                <option value="2">Semester 2 (SGPA: 9.15)</option>
+                <option value="1">Semester 1 (SGPA: 9.30)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- METRICS TOP -->
+          <div class="kpi-deck">
+            <div class="kpi-card">
+              <span class="kpi-sub">Current SGPA</span>
+              <span class="kpi-big" id="currentSgpaVal">9.18</span>
+              <span class="kpi-trend positive">▲ +0.10 from Sem 4</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-sub">Cumulative CGPA</span>
+              <span class="kpi-big">9.12</span>
+              <span class="kpi-trend positive">Class Rank: #4 of 142</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-sub">Total Credits Earned</span>
+              <span class="kpi-big">128 / 160</span>
+              <span class="kpi-trend neutral">80% Degree Completed</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-sub">Active Backlogs</span>
+              <span class="kpi-big safe-stat">0</span>
+              <span class="kpi-trend positive">All Clear Track</span>
+            </div>
+          </div>
+
+          <!-- MARKS TABLE -->
+          <div class="card table-card">
+            <div class="card-header">
+              <h3>Subject-Wise Marks Breakdown</h3>
+              <div class="table-actions">
+                <button class="btn-secondary" id="exportMarksPdf">📄 Export Marks Card</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="marksTable">
+                <thead>
+                  <tr>
+                    <th>Course Code</th>
+                    <th>Course Title</th>
+                    <th>Credits</th>
+                    <th>Internal (IA1+IA2)</th>
+                    <th>Lab/Project</th>
+                    <th>End-Sem Exam</th>
+                    <th>Total (/100)</th>
+                    <th>Grade</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="marksTableBody">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. SMART ATTENDANCE -->
+        <section id="view-attendance" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>2. Smart Attendance Monitor</h2>
+              <p>Real-time lecture & lab logs, OD credits, and attendance status</p>
+            </div>
+            <div class="badge-tag safe-tag">Overall: 88.4% (Threshold: 75%)</div>
+          </div>
+
+          <div class="grid-2col">
+            <div class="card">
+              <div class="card-header">
+                <h3>Overall Attendance Summary</h3>
+                <span class="badge-pill">Sem 6</span>
+              </div>
+              <div class="att-overview-box">
+                <div class="circular-progress-wrap">
+                  <svg viewBox="0 0 100 100" class="circular-chart">
+                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="circle-bar" stroke-dasharray="88.4, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <text x="18" y="20.35" class="circle-percentage">88.4%</text>
+                  </svg>
+                </div>
+                <div class="att-counts">
+                  <div class="count-item">
+                    <span class="count-num text-success">228</span>
+                    <span class="count-lbl">Total Attended</span>
+                  </div>
+                  <div class="count-item">
+                    <span class="count-num text-danger">30</span>
+                    <span class="count-lbl">Total Absences</span>
+                  </div>
+                  <div class="count-item">
+                    <span class="count-num text-warning">14</span>
+                    <span class="count-lbl">On-Duty (OD) Approved</span>
+                  </div>
+                  <div class="count-item">
+                    <span class="count-num text-info">272</span>
+                    <span class="count-lbl">Conducted Hours</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Attendance Insights & OD Tracker</h3>
+              </div>
+              <div class="card-body">
+                <div class="od-status-list">
+                  <div class="od-item">
+                    <div class="od-icon">🏷️</div>
+                    <div class="od-text">
+                      <strong>Hackathon Finals - IEEE MIT</strong>
+                      <span class="sub">3 Days OD Approved (12 lectures) • Code: OD-2026-081</span>
+                    </div>
+                    <span class="badge-status success">Applied</span>
+                  </div>
+                  <div class="od-item">
+                    <div class="od-icon">🏷️</div>
+                    <div class="od-text">
+                      <strong>University Cricket Championship</strong>
+                      <span class="sub">1 Day OD Approved (4 lectures) • Code: OD-2026-042</span>
+                    </div>
+                    <span class="badge-status success">Applied</span>
+                  </div>
+                </div>
+                <button class="btn-secondary full-width mt-12" id="btnRequestOd">
+                  + Request New On-Duty (OD) Approval
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUBJECT WISE ATTENDANCE TABLE -->
+          <div class="card table-card mt-24">
+            <div class="card-header">
+              <h3>Subject-Wise Attendance Breakdown</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="attendanceTable">
+                <thead>
+                  <tr>
+                    <th>Subject</th>
+                    <th>Faculty</th>
+                    <th>Attended</th>
+                    <th>Absent</th>
+                    <th>OD</th>
+                    <th>Total</th>
+                    <th>Percentage</th>
+                    <th>Safe Bunks Left</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="attendanceTableBody">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. ATTENDANCE CALCULATOR -->
+        <section id="view-att-calc" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>3. Attendance & Bunk Forecaster</h2>
+              <p>Simulate future attendance, safe bunking limits, and emergency recovery targets</p>
+            </div>
+          </div>
+
+          <div class="calc-layout">
+            <div class="card calc-form-card">
+              <div class="card-header">
+                <h3>Attendance Simulation Parameters</h3>
+              </div>
+              <div class="card-body form-grid">
+                <div class="form-group">
+                  <label for="calcTotalHeld">Total Classes Held So Far:</label>
+                  <input type="number" id="calcTotalHeld" value="48" min="1" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label for="calcAttended">Classes Attended So Far:</label>
+                  <input type="number" id="calcAttended" value="43" min="0" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label for="calcTarget">Target Threshold Percentage (%):</label>
+                  <input type="number" id="calcTarget" value="75" min="1" max="100" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label for="calcPresetSubject">Or Load From Your Subjects:</label>
+                  <select id="calcPresetSubject" class="form-select">
+                    <option value="">-- Choose Course --</option>
+                    <!-- Injected via JS -->
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="card calc-result-card" id="calcResultBox">
+              <div class="card-header">
+                <h3>Calculation Outcome</h3>
+                <span class="badge-tag" id="calcCurrentPercent">90.2% Current</span>
+              </div>
+              <div class="card-body result-content" id="calcDynamicOutput">
+                <!-- Injected via JS -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. TIMETABLE -->
+        <section id="view-timetable" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>4. Dynamic Timetable & Faculty Schedules</h2>
+              <p>Section CSE-6B • Room LH-302 / Lab Complex 4</p>
+            </div>
+            <div class="day-switcher" id="ttDaySwitcher">
+              <button class="day-btn" data-day="1">Mon</button>
+              <button class="day-btn active" data-day="2">Tue</button>
+              <button class="day-btn" data-day="3">Wed</button>
+              <button class="day-btn" data-day="4">Thu</button>
+              <button class="day-btn" data-day="5">Fri</button>
+              <button class="day-btn" data-day="6">Sat</button>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-header">
+              <h3 id="ttDayTitle">Tuesday Schedule</h3>
+              <span class="badge-pill">6 Periods Scheduled</span>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table timetable-table">
+                <thead>
+                  <tr>
+                    <th>Time Slot</th>
+                    <th>Course Code & Title</th>
+                    <th>Type</th>
+                    <th>Venue / Room</th>
+                    <th>Faculty Instructor</th>
+                    <th>Live State</th>
+                  </tr>
+                </thead>
+                <tbody id="timetableBody">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. ASSIGNMENT TRACKER -->
+        <section id="view-assignments" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>5. Assignment & Lab Project Tracker</h2>
+              <p>Track deadlines, upload submissions, and inspect professor grading feedback</p>
+            </div>
+            <button class="btn-primary" id="btnNewAssignmentModal">+ Submit Assignment</button>
+          </div>
+
+          <div class="tabs-nav">
+            <button class="tab-btn active" data-filter="all">All Assignments (<span id="count-all-assig">5</span>)</button>
+            <button class="tab-btn" data-filter="pending">Pending Deadlines (<span id="count-pending-assig">2</span>)</button>
+            <button class="tab-btn" data-filter="submitted">Submitted (<span id="count-submitted-assig">1</span>)</button>
+            <button class="tab-btn" data-filter="graded">Graded & Reviewed (<span id="count-graded-assig">2</span>)</button>
+          </div>
+
+          <div class="assignment-grid" id="assignmentGrid">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- 6. NOTES & STUDY MATERIALS -->
+        <section id="view-notes" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>6. Notes, PPTs & Question Paper Vault</h2>
+              <p>Curated notes, official lab manuals, and 5-year previous university papers</p>
+            </div>
+            <div class="search-filter-row">
+              <select id="notesSubjectFilter" class="form-select">
+                <option value="all">All Subjects</option>
+                <option value="CS601">Distributed Systems</option>
+                <option value="CS602">Machine Learning</option>
+                <option value="CS603">Compiler Design</option>
+                <option value="CS604">Cloud Architecture</option>
+                <option value="CS605">Cyber Security</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="notes-catalog" id="notesCatalog">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- 7. EXAMINATION MANAGEMENT -->
+        <section id="view-exams" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>7. Examination & Hall Ticket Portal</h2>
+              <p>End-semester schedules, official admit card, revaluation requests, and past results</p>
+            </div>
+            <button class="btn-primary" id="btnPrintHallTicket">🎫 Print Digital Hall Ticket</button>
+          </div>
+
+          <div class="grid-2col">
+            <div class="card">
+              <div class="card-header">
+                <h3>Official Admit Card Preview</h3>
+                <span class="badge-status success">Verified & Sealed</span>
+              </div>
+              <div class="hall-ticket-card" id="hallTicketCard">
+                <div class="ht-header">
+                  <div>
+                    <h4>UNIVERSITY EXAMINATIONS BOARD</h4>
+                    <span class="sub">B.Tech End-Semester Examination 2026</span>
+                  </div>
+                  <div class="ht-seal">SEALED</div>
+                </div>
+                <div class="ht-body">
+                  <div class="ht-avatar-box">
+                    <div class="avatar-ph">AK</div>
+                    <span class="ht-usn">1MS21CS084</span>
+                  </div>
+                  <div class="ht-meta-grid">
+                    <div><strong>Candidate:</strong> Alex Kumar</div>
+                    <div><strong>Course:</strong> B.Tech - Computer Science</div>
+                    <div><strong>Exam Center:</strong> Block-3, Exam Hall 401</div>
+                    <div><strong>Seat Allotment:</strong> Row D - Seat 14</div>
+                  </div>
+                </div>
+                <div class="ht-footer">
+                  <div class="barcode">||| | ||||| || |||||| | ||||| |||||||</div>
+                  <span class="sub">Carry valid college photo ID along with this permit</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Exam Timetable & Revaluation Status</h3>
+              </div>
+              <div class="card-body">
+                <div class="exam-list" id="examTimetableList">
+                  <!-- Injected via JS -->
+                </div>
+                <div class="reval-box mt-16">
+                  <h4>Apply for Revaluation / Photocopy</h4>
+                  <p class="sub">Window opens 48 hours post result announcement.</p>
+                  <button class="btn-secondary mt-8" id="btnOpenRevalModal">Submit Revaluation Application</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 8. SGPA & CGPA CALCULATOR -->
+        <section id="view-gpa-calc" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>8. SGPA & Cumulative CGPA Forecaster</h2>
+              <p>Add expected grades and credits to compute target semester SGPA and cumulative graduation CGPA</p>
+            </div>
+            <button class="btn-secondary" id="btnAddCalcCourse">+ Add Course Row</button>
+          </div>
+
+          <div class="calc-layout">
+            <div class="card">
+              <div class="card-header">
+                <h3>Semester Course Grades</h3>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="gpaCalcTable">
+                  <thead>
+                    <tr>
+                      <th>Subject / Course</th>
+                      <th>Credit Hours</th>
+                      <th>Expected Grade</th>
+                      <th>Grade Points</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="gpaCalcBody">
+                    <!-- Injected via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card gpa-summary-card">
+              <div class="card-header">
+                <h3>Graduation CGPA Projection</h3>
+              </div>
+              <div class="card-body">
+                <div class="gpa-summary-val">
+                  <span class="lbl">Predicted Semester SGPA:</span>
+                  <strong class="highlight" id="projectedSgpa">9.35</strong>
+                </div>
+                <div class="gpa-summary-val">
+                  <span class="lbl">Cumulative Degree CGPA:</span>
+                  <strong class="highlight" id="projectedCgpa">9.16</strong>
+                </div>
+                <div class="gpa-formula-box">
+                  <p><strong>Formula:</strong></p>
+                  <p>SGPA = ∑(Course Credits × Grade Points) / ∑(Credits)</p>
+                  <p>CGPA = (Prior Earned Points + Current Sem Points) / Total Credits</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. PROFILE & DIGITAL ID -->
+        <section id="view-profile" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>9. Student Profile & QR Digital ID</h2>
+              <p>Official student credential, academic records, and NFC/QR contactless identity card</p>
+            </div>
+          </div>
+
+          <div class="grid-2col">
+            <!-- VIRTUAL ID CARD -->
+            <div class="card digital-id-container">
+              <div class="card-header">
+                <h3>Official Digital Smart Card</h3>
+                <span class="badge-status success">Active Student</span>
+              </div>
+              <div class="smart-id-card" id="smartIdCard">
+                <div class="smart-id-head">
+                  <div class="logo-chip">STUDENT ID</div>
+                  <span class="chip-sym">💳 CHIP ID</span>
+                </div>
+                <div class="smart-id-center">
+                  <div class="student-photo">AK</div>
+                  <div class="student-specs">
+                    <h3>Alex Kumar</h3>
+                    <p class="usn-code">USN: 1MS21CS084</p>
+                    <p class="dept">Dept of Computer Science & Engg</p>
+                    <p class="batch">Batch: 2021 - 2025 • Sem: 6B</p>
+                  </div>
+                </div>
+                <div class="smart-id-lower">
+                  <div class="qr-box">
+                    <svg class="qr-svg" viewBox="0 0 100 100">
+                      <!-- Rendered SVG QR representation -->
+                      <rect width="100" height="100" fill="#ffffff" rx="4"/>
+                      <path d="M10 10h24v24h-24z M14 14h16v16h-16z M18 18h8v8h-8z" fill="#000000"/>
+                      <path d="M66 10h24v24h-24z M70 14h16v16h-16z M74 18h8v8h-8z" fill="#000000"/>
+                      <path d="M10 66h24v24h-24z M14 70h16v16h-16z M18 74h8v8h-8z" fill="#000000"/>
+                      <path d="M42 10h6v6h-6z M52 14h6v12h-6z M42 22h6v10h-6z M66 40h10v6h-10z M40 40h16v6h-16z M10 46h12v6h-12z M30 50h12v10h-12z M50 50h14v6h-14z M70 54h14v10h-14z M40 66h10v12h-10z M60 70h14v8h-14z M80 74h10v14h-10z M50 82h12v8h-12z" fill="#000000"/>
+                    </svg>
+                  </div>
+                  <div class="id-security-meta">
+                    <div><strong>Blood Group:</strong> O+</div>
+                    <div><strong>Emergency:</strong> +91 98450 12345</div>
+                    <div><strong>Valid Upto:</strong> June 2025</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PROFILE DETAILS TAB -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Personal & Academic Registry</h3>
+                <button class="btn-text" id="btnEditProfile">Edit Contacts</button>
+              </div>
+              <div class="card-body">
+                <div class="profile-info-grid">
+                  <div class="info-block">
+                    <span class="lbl">Full Name</span>
+                    <strong class="val">Alex Kumar</strong>
+                  </div>
+                  <div class="info-block">
+                    <span class="lbl">Email Address</span>
+                    <strong class="val">alex.cs21@apexuniversity.edu.in</strong>
+                  </div>
+                  <div class="info-block">
+                    <span class="lbl">Phone Number</span>
+                    <strong class="val">+91 98765 43210</strong>
+                  </div>
+                  <div class="info-block">
+                    <span class="lbl">Date of Birth</span>
+                    <strong class="val">14 August 2003</strong>
+                  </div>
+                  <div class="info-block">
+                    <span class="lbl">Faculty Mentor</span>
+                    <strong class="val">Dr. Rajeshwari Swaminathan (Cabin C-204)</strong>
+                  </div>
+                  <div class="info-block">
+                    <span class="lbl">Hostel Allotment</span>
+                    <strong class="val">Sir MV Boys Block, Room 314</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 10. PLACEMENT & CAREER -->
+        <section id="view-placements" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>10. Placement & Career Hub</h2>
+              <p>Campus recruitment drives, internships, resume tracker, and mock interview scheduler</p>
+            </div>
+            <button class="btn-primary" id="btnScheduleMockInterview">🎙️ Schedule Mock Interview</button>
+          </div>
+
+          <div class="kpi-deck">
+            <div class="kpi-card">
+              <span class="kpi-sub">Placement Eligibility</span>
+              <span class="kpi-big text-success">Eligible</span>
+              <span class="kpi-trend positive">No active backlogs • >8.0 CGPA</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-sub">Applications Sent</span>
+              <span class="kpi-big">6 Drives</span>
+              <span class="kpi-trend neutral">2 Shortlisted</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-sub">ATS Resume Score</span>
+              <span class="kpi-big">92 / 100</span>
+              <span class="kpi-trend positive">High match for SWE roles</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-sub">Upcoming Interviews</span>
+              <span class="kpi-big">1 Round</span>
+              <span class="kpi-trend neutral">Google Tech Screen (Nov 12)</span>
+            </div>
+          </div>
+
+          <div class="card table-card mt-24">
+            <div class="card-header">
+              <h3>Active & Upcoming Campus Recruitment Drives</h3>
+              <div class="filter-group">
+                <button class="filter-pill active" data-drive="all">All</button>
+                <button class="filter-pill" data-drive="tech">Tech / SWE</button>
+                <button class="filter-pill" data-drive="intern">Internships</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="placementTable">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Type</th>
+                    <th>CTC / Stipend</th>
+                    <th>Deadline</th>
+                    <th>Eligibility</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="placementTableBody">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 11. PROJECTS HUB -->
+        <section id="view-projects" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>11. Collaborative Projects & Teammate Finder</h2>
+              <p>Capstones, hackathon teams, faculty guides, and open repositories</p>
+            </div>
+            <button class="btn-primary" id="btnNewProjectModal">+ Showcase New Project</button>
+          </div>
+
+          <div class="projects-grid" id="projectsGrid">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- 12. EVENTS & CLUBS -->
+        <section id="view-events" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>12. College Events, Hackathons & Clubs</h2>
+              <p>Explore technical symposiums, club registrations, and verified participation credentials</p>
+            </div>
+            <button class="btn-secondary" id="btnViewCertificates">🏅 My Issued Certificates</button>
+          </div>
+
+          <div class="events-grid" id="eventsGrid">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- 13. LIBRARY MANAGEMENT -->
+        <section id="view-library" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>13. Central Digital Library</h2>
+              <p>OPAC catalog search, book reservation, issued loan renewals, and overdue tracker</p>
+            </div>
+          </div>
+
+          <div class="grid-2col">
+            <div class="card">
+              <div class="card-header">
+                <h3>Search Physical & Digital Repository</h3>
+              </div>
+              <div class="card-body">
+                <div class="search-box-wrap">
+                  <input type="text" id="librarySearchInput" class="form-input" placeholder="Search by title, author, ISBN or subject...">
+                  <button class="btn-primary" id="btnSearchLibrary">Search</button>
+                </div>
+                <div class="book-results-list" id="bookResultsList">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>My Currently Issued Books (2/4 Quota)</h3>
+                <span class="badge-tag">No Fines Due</span>
+              </div>
+              <div class="card-body">
+                <div class="issued-books-list" id="issuedBooksList">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 14. CAMPUS SERVICES -->
+        <section id="view-services" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>14. Campus Facilities, Transit & Services</h2>
+              <p>Real-time campus shuttle GPS, cafeteria live menus, interactive facility map, and lost & found</p>
+            </div>
+          </div>
+
+          <div class="grid-2col">
+            <!-- BUS TRACKER -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Live College Bus & Shuttle Tracker</h3>
+                <span class="badge-live">LIVE GPS</span>
+              </div>
+              <div class="card-body">
+                <div class="bus-selector-row">
+                  <label>Route:</label>
+                  <select id="busRouteSelect" class="form-select">
+                    <option value="route14">Route 14 - Electronic City to Campus (Driver: Ramesh M)</option>
+                    <option value="route7">Route 7 - Indiranagar to Campus (Driver: Suresh K)</option>
+                    <option value="route22">Route 22 - Whitefield to Campus (Driver: Venkatesh)</option>
+                  </select>
+                </div>
+                <div class="bus-map-simulation" id="busMapSim">
+                  <div class="bus-route-path">
+                    <div class="route-stop passed"><span class="stop-dot"></span> Silk Board (07:45 AM)</div>
+                    <div class="route-stop passed"><span class="stop-dot"></span> HSR Layout (08:05 AM)</div>
+                    <div class="route-stop current"><span class="stop-dot pulse"></span> Agara Junction (Now: 08:22 AM) 🚌</div>
+                    <div class="route-stop upcoming"><span class="stop-dot"></span> Bellandur (ETA: 08:35 AM)</div>
+                    <div class="route-stop upcoming"><span class="stop-dot"></span> Campus Gate 2 (ETA: 08:50 AM)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CANTEEN & LOST/FOUND -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Cafeteria & Amenities Status</h3>
+                <span class="badge-pill">Crowd: Moderate</span>
+              </div>
+              <div class="card-body">
+                <div class="canteen-menu-box">
+                  <h4>Today's Chef Specials @ Central Food Court</h4>
+                  <ul class="canteen-list">
+                    <li><span>🍛 North Indian Deluxe Thali</span> <strong>₹80</strong></li>
+                    <li><span>🥪 Grilled Paneer Tikka Wrap</span> <strong>₹55</strong></li>
+                    <li><span>🥗 High-Protein Sprout Salad</span> <strong>₹40</strong></li>
+                    <li><span>☕ Fresh Filter Coffee / Chai</span> <strong>₹15</strong></li>
+                  </ul>
+                </div>
+                <div class="lost-found-trigger mt-16">
+                  <button class="btn-secondary full-width" id="btnLostFoundModal">
+                    🔍 Report or View Lost & Found Items (4 active)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 15. COMMUNICATION & NOTIFICATIONS -->
+        <section id="view-comms" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>15. Communications & Faculty Directory</h2>
+              <p>Official university circulars, department memos, and appointment booking</p>
+            </div>
+            <button class="btn-primary" id="btnBookAppointment">+ Book Faculty Appointment</button>
+          </div>
+
+          <div class="grid-2col">
+            <div class="card">
+              <div class="card-header">
+                <h3>Official Announcements Feed</h3>
+              </div>
+              <div class="card-body feed-scroll" id="announcementsFeed">
+                <!-- Injected via JS -->
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Faculty Mentors & Department Directory</h3>
+              </div>
+              <div class="card-body">
+                <div class="faculty-directory" id="facultyDirectory">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 16. PERFORMANCE ANALYTICS -->
+        <section id="view-analytics" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>16. Performance Analytics & Insights</h2>
+              <p>Interactive data visualisations: SGPA progression, subject benchmark radar, and attendance vs score correlation</p>
+            </div>
+          </div>
+
+          <div class="grid-2col">
+            <!-- CANVAS SGPA GRAPH -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Semester SGPA Progression Trend</h3>
+                <span class="badge-tag">Across 6 Semesters</span>
+              </div>
+              <div class="card-body">
+                <div class="chart-container">
+                  <canvas id="sgpaChart" width="500" height="260"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- CANVAS ATTENDANCE VS MARKS -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Subject Mastery vs Attendance Correlation</h3>
+                <span class="badge-tag">Current Semester</span>
+              </div>
+              <div class="card-body">
+                <div class="chart-container">
+                  <canvas id="masteryChart" width="500" height="260"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 17. FACULTY DOUBT PORTAL -->
+        <section id="view-doubts" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <h2>17. Faculty Doubt Portal & Peer Discussion</h2>
+              <p>Direct academic question thread, code/diagram uploads, and verified professor answers</p>
+            </div>
+            <button class="btn-primary" id="btnAskDoubtModal">💬 Post Academic Doubt</button>
+          </div>
+
+          <div class="doubt-stream" id="doubtStream">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODALS CONTAINER -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box" id="modalBox">
+      <div class="modal-header">
+        <h3 id="modalTitle">Modal Dialog</h3>
+        <button class="modal-close" id="modalCloseBtn">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
