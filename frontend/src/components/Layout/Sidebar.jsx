@@ -21,11 +21,21 @@ const NAV_ITEMS = [
   { id: 'doubts', label: 'Faculty Doubt Portal' }
 ];
 
-export default function Sidebar({ activeTab, onSelectTab }) {
+export default function Sidebar({ activeTab, onSelectTab, mobileOpen, onCloseMobile }) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
+    <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span className="sidebar-header-title">COLLEGE PORTAL</span>
+        {mobileOpen && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ padding: '2px 8px', fontSize: '11px', color: '#1e293b' }}
+            onClick={onCloseMobile}
+          >
+            Close
+          </button>
+        )}
       </div>
       <nav className="sidebar-nav">
         {NAV_ITEMS.map((item) => (
@@ -33,7 +43,10 @@ export default function Sidebar({ activeTab, onSelectTab }) {
             key={item.id}
             type="button"
             className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-            onClick={() => onSelectTab(item.id, item.label)}
+            onClick={() => {
+              onSelectTab(item.id, item.label);
+              if (onCloseMobile) onCloseMobile();
+            }}
           >
             {item.label}
           </button>

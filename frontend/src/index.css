@@ -574,6 +574,18 @@ body {
 }
 
 /* RESPONSIVE */
+.mobile-menu-btn {
+  display: none;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #1e293b;
+}
+
 @media (max-width: 900px) {
   .dashboard-sections-grid {
     grid-template-columns: 1fr;
@@ -581,7 +593,122 @@ body {
 }
 
 @media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: inline-block;
+  }
+
   .sidebar {
     display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 250px;
+    z-index: 1000;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.25);
   }
+
+  .sidebar.mobile-open {
+    display: flex !important;
+  }
+
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .content-area {
+    padding: 12px;
+  }
+
+  .stats-grid,
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* DIGITAL STUDENT ID BADGE */
+.id-card-wrapper {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin: 20px 0;
+}
+
+.id-card-badge {
+  width: 360px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+.id-card-header {
+  background: #1e3a8a;
+  color: #ffffff;
+  padding: 12px 14px;
+  text-align: center;
+  border-bottom: 2px solid #2563eb;
+}
+
+.id-card-header-college {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.id-card-header-sub {
+  font-size: 10px;
+  color: #bfdbfe;
+  margin-top: 2px;
+}
+
+.id-card-body {
+  padding: 16px;
+}
+
+.id-photo-box {
+  width: 95px;
+  height: 115px;
+  border: 2px solid #1e3a8a;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.id-photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.id-field-label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.id-field-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.id-card-footer {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
 }

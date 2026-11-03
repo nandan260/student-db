@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import Navbar from './components/Layout/Navbar';
 import Sidebar from './components/Layout/Sidebar';
 import DashboardHome from './components/Dashboard/DashboardHome';
+import AuthScreen from './components/Auth/AuthScreen';
+import { clearAuth } from './api';
 import {
   AcademicPerformanceView,
   AttendanceView,
@@ -22,73 +24,118 @@ import {
   FacultyDoubtPortalView
 } from './components/Modules/ModuleViews';
 
-export default function App() {
-  const [currentUser] = useState({
+const ROLE_PROFILES = {
+  student: {
     name: 'Alex Kumar',
     identifier: '1MS21CS084',
     role: 'student',
     department: 'Computer Science & Engineering',
     semester: 6
-  });
+  },
+  faculty: {
+    name: 'Dr. K. V. Sharma',
+    identifier: 'EMP-CS104',
+    role: 'faculty',
+    department: 'Computer Science & Engineering',
+    semester: 0
+  },
+  admin: {
+    name: 'Dean Academics',
+    identifier: 'ADM-001',
+    role: 'admin',
+    department: 'Administration',
+    semester: 0
+  }
+};
 
+export default function App() {
+  const [currentUser, setCurrentUser] = useState(ROLE_PROFILES.student);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeTitle, setActiveTitle] = useState('Dashboard');
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleRoleChange = (newRole) => {
+    setCurrentUser(ROLE_PROFILES[newRole] || ROLE_PROFILES.student);
+  };
+
+  const handleLogout = () => {
+    clearAuth();
+    setCurrentUser(null);
+  };
 
   const handleSelectTab = (tabId, label) => {
     setActiveTab(tabId);
     setActiveTitle(label);
   };
 
+  if (!currentUser) {
+    return <AuthScreen onLoginSuccess={(user) => {
+      setCurrentUser(user);
+      setActiveTab('dashboard');
+      setActiveTitle('Dashboard');
+    }} />;
+  }
+
   const renderActiveView = () => {
+    const role = currentUser.role;
+
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardHome onNavigate={handleSelectTab} />;
+        return <DashboardHome onNavigate={handleSelectTab} userRole={role} />;
       case 'academics':
-        return <AcademicPerformanceView />;
+        return <AcademicPerformanceView userRole={role} />;
       case 'attendance':
-        return <AttendanceView />;
+        return <AttendanceView userRole={role} />;
       case 'attendance_calc':
-        return <AttendanceCalculatorView />;
+        return <AttendanceCalculatorView userRole={role} />;
       case 'timetable':
-        return <TimetableView />;
+        return <TimetableView userRole={role} />;
       case 'assignments':
-        return <AssignmentsView />;
+        return <AssignmentsView userRole={role} />;
       case 'notes':
-        return <NotesView />;
+        return <NotesView userRole={role} />;
       case 'examinations':
-        return <ExaminationsView />;
+        return <ExaminationsView userRole={role} />;
       case 'gpa_calc':
-        return <GpaCalculatorView />;
+        return <GpaCalculatorView userRole={role} />;
       case 'profile':
-        return <StudentProfileView />;
+        return <StudentProfileView userRole={role} />;
       case 'placements':
-        return <PlacementsView />;
+        return <PlacementsView userRole={role} />;
       case 'projects':
-        return <ProjectsView />;
+        return <ProjectsView userRole={role} />;
       case 'events':
-        return <EventsView />;
+        return <EventsView userRole={role} />;
       case 'library':
-        return <LibraryView />;
+        return <LibraryView userRole={role} />;
       case 'services':
-        return <CampusServicesView />;
+        return <CampusServicesView userRole={role} />;
       case 'notifications':
-        return <NotificationsView />;
+        return <NotificationsView userRole={role} />;
       case 'analytics':
-        return <PerformanceAnalyticsView />;
+        return <PerformanceAnalyticsView userRole={role} />;
       case 'doubts':
-        return <FacultyDoubtPortalView />;
+        return <FacultyDoubtPortalView userRole={role} />;
       default:
-        return <DashboardHome onNavigate={handleSelectTab} />;
+        return <DashboardHome onNavigate={handleSelectTab} userRole={role} />;
     }
   };
 
   return (
     <div className="app-layout">
-      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} />
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
       <div className="main-wrapper">
         <Navbar
           user={currentUser}
+          onRoleChange={handleRoleChange}
           activeTitle={activeTitle}
+          onLogout={handleLogout}
+          onToggleMobileMenu={() => setMobileOpen(!mobileOpen)}
         />
         <main className="content-area">
           {renderActiveView()}
