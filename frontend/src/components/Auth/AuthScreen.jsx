@@ -72,7 +72,7 @@ export default function AuthScreen({ onLoginSuccess }) {
       <div className="auth-card">
         <div className="auth-header">
           <h1>COLLEGE PORTAL</h1>
-          <p>Student, Faculty & Administration Management System</p>
+          <p>Student Management System</p>
         </div>
 
         <div className="auth-body">
@@ -96,32 +96,6 @@ export default function AuthScreen({ onLoginSuccess }) {
           {error && <div className="alert-box alert-danger">{error}</div>}
 
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Select Portal Role</label>
-              <div className="role-selector">
-                <button
-                  type="button"
-                  className={`role-btn ${role === 'student' ? 'active' : ''}`}
-                  onClick={() => setRole('student')}
-                >
-                  Student
-                </button>
-                <button
-                  type="button"
-                  className={`role-btn ${role === 'faculty' ? 'active' : ''}`}
-                  onClick={() => setRole('faculty')}
-                >
-                  Faculty
-                </button>
-                <button
-                  type="button"
-                  className={`role-btn ${role === 'admin' ? 'active' : ''}`}
-                  onClick={() => setRole('admin')}
-                >
-                  Admin
-                </button>
-              </div>
-            </div>
 
             {isRegister && (
               <>
@@ -138,14 +112,14 @@ export default function AuthScreen({ onLoginSuccess }) {
                 </div>
 
                 <div className="form-group">
-                  <label>{role === 'student' ? 'University Seat Number (USN)' : 'Employee ID'}</label>
+                  <label>University Seat Number (USN)</label>
                   <input
                     type="text"
                     required
                     className="form-input"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder={role === 'student' ? 'e.g. 1MS21CS084' : 'e.g. EMP-104'}
+                    placeholder="e.g. 1MS21CS084"
                   />
                 </div>
 
@@ -215,13 +189,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               <strong>Quick Demo Sign In:</strong>
               <div className="demo-btn-row">
                 <button type="button" className="demo-btn" onClick={() => setDemoUser('student')}>
-                  Student Demo
-                </button>
-                <button type="button" className="demo-btn" onClick={() => setDemoUser('faculty')}>
-                  Faculty Demo
-                </button>
-                <button type="button" className="demo-btn" onClick={() => setDemoUser('admin')}>
-                  Admin Demo
+                  Student Demo (Alex Kumar)
                 </button>
               </div>
             </div>

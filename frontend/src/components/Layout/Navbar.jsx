@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Navbar({ user, onRoleChange, activeTitle, onLogout, onToggleMobileMenu }) {
+export default function Navbar({ user, activeTitle, onLogout, onToggleMobileMenu }) {
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -15,23 +15,9 @@ export default function Navbar({ user, onRoleChange, activeTitle, onLogout, onTo
       </div>
 
       <div className="topbar-right">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '8px' }}>
-          <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>Active Role:</label>
-          <select
-            className="form-select"
-            style={{ padding: '4px 8px', fontSize: '12px', width: 'auto' }}
-            value={user.role}
-            onChange={(e) => onRoleChange(e.target.value)}
-          >
-            <option value="student">Student (Alex Kumar)</option>
-            <option value="faculty">Faculty (Dr. K. V. Sharma)</option>
-            <option value="admin">Administrator (Dean Academics)</option>
-          </select>
-        </div>
-
         {user && (
           <div className="user-badge" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="user-role-tag">{user.role}</span>
+            <span className="user-role-tag">Student</span>
             <span className="user-name">{user.name} ({user.identifier})</span>
           </div>
         )}

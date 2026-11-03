@@ -26,39 +26,19 @@ import {
 import FacultyMentorView from './components/Modules/FacultyMentorView';
 import FeesManagementView from './components/Modules/FeesManagementView';
 
-const ROLE_PROFILES = {
-  student: {
-    name: 'Alex Kumar',
-    identifier: '1MS21CS084',
-    role: 'student',
-    department: 'Computer Science & Engineering',
-    semester: 6
-  },
-  faculty: {
-    name: 'Dr. K. V. Sharma',
-    identifier: 'EMP-CS104',
-    role: 'faculty',
-    department: 'Computer Science & Engineering',
-    semester: 0
-  },
-  admin: {
-    name: 'Dean Academics',
-    identifier: 'ADM-001',
-    role: 'admin',
-    department: 'Administration',
-    semester: 0
-  }
+const STUDENT_PROFILE = {
+  name: 'Alex Kumar',
+  identifier: '1MS21CS084',
+  role: 'student',
+  department: 'Computer Science & Engineering',
+  semester: 6
 };
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(ROLE_PROFILES.student);
+  const [currentUser, setCurrentUser] = useState(STUDENT_PROFILE);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeTitle, setActiveTitle] = useState('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const handleRoleChange = (newRole) => {
-    setCurrentUser(ROLE_PROFILES[newRole] || ROLE_PROFILES.student);
-  };
 
   const handleLogout = () => {
     clearAuth();
@@ -138,7 +118,6 @@ export default function App() {
       <div className="main-wrapper">
         <Navbar
           user={currentUser}
-          onRoleChange={handleRoleChange}
           activeTitle={activeTitle}
           onLogout={handleLogout}
           onToggleMobileMenu={() => setMobileOpen(!mobileOpen)}
