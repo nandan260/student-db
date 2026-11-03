@@ -23,6 +23,8 @@ import {
   PerformanceAnalyticsView,
   FacultyDoubtPortalView
 } from './components/Modules/ModuleViews';
+import FacultyMentorView from './components/Modules/FacultyMentorView';
+import FeesManagementView from './components/Modules/FeesManagementView';
 
 const ROLE_PROFILES = {
   student: {
@@ -116,6 +118,10 @@ export default function App() {
         return <PerformanceAnalyticsView userRole={role} />;
       case 'doubts':
         return <FacultyDoubtPortalView userRole={role} />;
+      case 'faculty_mentor':
+        return <FacultyMentorView userRole={role} currentUser={currentUser} />;
+      case 'fees':
+        return <FeesManagementView userRole={role} currentUser={currentUser} />;
       default:
         return <DashboardHome onNavigate={handleSelectTab} userRole={role} />;
     }

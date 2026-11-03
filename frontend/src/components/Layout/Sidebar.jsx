@@ -18,7 +18,9 @@ const NAV_ITEMS = [
   { id: 'services', label: 'Campus Services' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'analytics', label: 'Performance Analytics' },
-  { id: 'doubts', label: 'Faculty Doubt Portal' }
+  { id: 'doubts', label: 'Faculty Doubt Portal' },
+  { id: 'faculty_mentor', label: 'Faculty Mentor' },
+  { id: 'fees', label: 'Fees Management' }
 ];
 
 export default function Sidebar({ activeTab, onSelectTab, mobileOpen, onCloseMobile }) {

@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash
+from seed_fees import seed_fees_data
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'student_portal.db')
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
@@ -11,6 +12,7 @@ RESUMES_UPLOAD_DIR = os.path.join(UPLOAD_DIR, 'resumes')
 PROJECTS_UPLOAD_DIR = os.path.join(UPLOAD_DIR, 'projects')
 CERTIFICATES_UPLOAD_DIR = os.path.join(UPLOAD_DIR, 'certificates')
 DOUBTS_UPLOAD_DIR = os.path.join(UPLOAD_DIR, 'doubts')
+MENTOR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, 'mentor')
 
 os.makedirs(ASSIGNMENTS_UPLOAD_DIR, exist_ok=True)
 os.makedirs(NOTES_UPLOAD_DIR, exist_ok=True)
@@ -19,6 +21,7 @@ os.makedirs(RESUMES_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROJECTS_UPLOAD_DIR, exist_ok=True)
 os.makedirs(CERTIFICATES_UPLOAD_DIR, exist_ok=True)
 os.makedirs(DOUBTS_UPLOAD_DIR, exist_ok=True)
+os.makedirs(MENTOR_UPLOAD_DIR, exist_ok=True)
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -506,6 +509,280 @@ def init_db():
         responded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(doubt_id) REFERENCES faculty_doubts(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS faculty_mentors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        faculty_id TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        designation TEXT NOT NULL,
+        qualification TEXT NOT NULL,
+        specialization TEXT NOT NULL,
+        subjects_handled TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        office_room TEXT NOT NULL,
+        consultation_hours TEXT NOT NULL,
+        photo_url TEXT DEFAULT '',
+        bio TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL UNIQUE,
+        usn TEXT NOT NULL UNIQUE,
+        student_name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        section TEXT DEFAULT 'B',
+        mentor_id INTEGER NOT NULL,
+        group_name TEXT DEFAULT 'CSE Batch 2021-2025 Mentor Group A',
+        assigned_date TEXT NOT NULL,
+        academic_year TEXT DEFAULT '2025-2026',
+        status TEXT DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(mentor_id) REFERENCES faculty_mentors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mentor_id INTEGER NOT NULL,
+        student_id INTEGER NOT NULL,
+        student_name TEXT NOT NULL,
+        mentor_name TEXT NOT NULL,
+        sender_role TEXT NOT NULL CHECK(sender_role IN ('student', 'faculty')),
+        sender_name TEXT NOT NULL,
+        subject TEXT DEFAULT 'Mentoring Inquiry',
+        message TEXT NOT NULL,
+        attachment_file TEXT DEFAULT '',
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(mentor_id) REFERENCES faculty_mentors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_discussions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mentor_id INTEGER NOT NULL,
+        group_name TEXT NOT NULL,
+        creator_id INTEGER NOT NULL,
+        creator_name TEXT NOT NULL,
+        creator_role TEXT NOT NULL CHECK(creator_role IN ('student', 'faculty')),
+        category TEXT DEFAULT 'Academic', -- 'Academic', 'Doubt', 'Study Material', 'Career', 'Announcement'
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        attachment_file TEXT DEFAULT '',
+        is_pinned INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'Active', -- 'Active', 'Locked', 'Archived'
+        views_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(mentor_id) REFERENCES faculty_mentors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_discussion_replies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        discussion_id INTEGER NOT NULL,
+        author_id INTEGER NOT NULL,
+        author_name TEXT NOT NULL,
+        author_role TEXT NOT NULL CHECK(author_role IN ('student', 'faculty')),
+        reply_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(discussion_id) REFERENCES mentor_discussions(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_meetings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mentor_id INTEGER NOT NULL,
+        student_id INTEGER NOT NULL,
+        student_name TEXT NOT NULL,
+        usn TEXT NOT NULL,
+        requested_date TEXT NOT NULL,
+        requested_slot TEXT NOT NULL,
+        meeting_type TEXT DEFAULT 'Academic Guidance', -- 'Academic Guidance', 'Career Counseling', 'Project Guidance', 'Personal Grievance', 'Attendance Review'
+        agenda TEXT NOT NULL,
+        status TEXT DEFAULT 'Requested', -- 'Requested', 'Approved', 'Rejected', 'Completed'
+        meeting_platform TEXT DEFAULT 'Google Meet',
+        meeting_link TEXT DEFAULT '',
+        mentor_notes TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(mentor_id) REFERENCES faculty_mentors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_book_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        mentor_id INTEGER NOT NULL,
+        session_date TEXT NOT NULL,
+        session_type TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        topics_discussed TEXT NOT NULL,
+        student_concerns TEXT NOT NULL,
+        mentor_suggestions TEXT NOT NULL,
+        action_items TEXT NOT NULL,
+        next_meeting_date TEXT DEFAULT '',
+        recorded_by TEXT DEFAULT 'Faculty Mentor',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_book_remarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        mentor_id INTEGER NOT NULL,
+        academic_observations TEXT NOT NULL,
+        strengths TEXT NOT NULL,
+        weaknesses TEXT NOT NULL,
+        areas_requiring_improvement TEXT NOT NULL,
+        mentor_recommendations TEXT NOT NULL,
+        follow_up_notes TEXT DEFAULT '',
+        updated_by TEXT DEFAULT 'Faculty Mentor',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(student_id, semester)
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_book_development (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL UNIQUE,
+        usn TEXT NOT NULL,
+        technical_skills TEXT DEFAULT '',
+        projects TEXT DEFAULT '',
+        certifications TEXT DEFAULT '',
+        internship_details TEXT DEFAULT '',
+        achievements TEXT DEFAULT '',
+        extracurricular_activities TEXT DEFAULT '',
+        updated_by TEXT DEFAULT 'Student / Mentor',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_student_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        mentor_id INTEGER NOT NULL,
+        meeting_id INTEGER DEFAULT NULL,
+        session_title TEXT NOT NULL,
+        rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+        usefulness TEXT NOT NULL,
+        feedback_text TEXT NOT NULL,
+        suggestions TEXT DEFAULT '',
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_slots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mentor_id INTEGER NOT NULL,
+        day_name TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        location_mode TEXT DEFAULT 'Online (Google Meet) / Office CS-304',
+        max_slots INTEGER DEFAULT 4,
+        is_active INTEGER DEFAULT 1,
+        FOREIGN KEY(mentor_id) REFERENCES faculty_mentors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mentor_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        performed_by TEXT NOT NULL,
+        role TEXT NOT NULL,
+        description TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS fee_structures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        department TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        academic_year TEXT NOT NULL,
+        fee_category TEXT NOT NULL,
+        total_amount REAL NOT NULL,
+        due_date TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        is_active INTEGER DEFAULT 1,
+        partial_payment_allowed INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(department, semester, academic_year, fee_category)
+    );
+
+    CREATE TABLE IF NOT EXISTS student_fee_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        academic_year TEXT NOT NULL,
+        fee_structure_id INTEGER NOT NULL,
+        fee_category TEXT NOT NULL,
+        total_amount REAL NOT NULL,
+        amount_paid REAL DEFAULT 0.0,
+        outstanding_amount REAL NOT NULL,
+        payment_status TEXT DEFAULT 'Pending',
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(fee_structure_id) REFERENCES fee_structures(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fee_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_id TEXT UNIQUE NOT NULL,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        payment_amount REAL NOT NULL,
+        payment_method TEXT NOT NULL,
+        payment_status TEXT DEFAULT 'Pending',
+        gateway_reference TEXT DEFAULT '',
+        payment_date TEXT DEFAULT '',
+        receipt_number TEXT UNIQUE,
+        payment_breakdown TEXT DEFAULT '',
+        fee_categories TEXT DEFAULT '',
+        academic_year TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        remarks TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS scholarships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        eligibility_criteria TEXT NOT NULL,
+        max_amount REAL NOT NULL,
+        scholarship_type TEXT DEFAULT 'Merit',
+        applicable_departments TEXT DEFAULT 'All',
+        min_cgpa REAL DEFAULT 0.0,
+        max_family_income REAL DEFAULT 0.0,
+        academic_year TEXT NOT NULL,
+        application_deadline TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS scholarship_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scholarship_id INTEGER NOT NULL,
+        student_id INTEGER NOT NULL,
+        usn TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        cgpa REAL NOT NULL,
+        application_text TEXT NOT NULL,
+        supporting_document TEXT DEFAULT '',
+        status TEXT DEFAULT 'Submitted',
+        approved_amount REAL DEFAULT 0.0,
+        admin_remarks TEXT DEFAULT '',
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_at TEXT DEFAULT '',
+        FOREIGN KEY(scholarship_id) REFERENCES scholarships(id)
+    );
     """)
 
     conn.commit()
@@ -581,6 +858,16 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM notifications")
     if cursor.fetchone()[0] == 0:
         seed_notifications_and_doubts(conn)
+
+    # Seed Faculty Mentor module if empty
+    cursor.execute("SELECT COUNT(*) FROM faculty_mentors")
+    if cursor.fetchone()[0] == 0:
+        seed_faculty_mentor_data(conn)
+
+    # Seed Fees Management module if empty
+    cursor.execute("SELECT COUNT(*) FROM fee_structures")
+    if cursor.fetchone()[0] == 0:
+        seed_fees_data(conn)
 
     conn.commit()
     conn.close()
@@ -1225,6 +1512,251 @@ def seed_notifications_and_doubts(conn):
     INSERT INTO doubt_responses (doubt_id, responder_name, responder_role, response_text, attachment_file)
     VALUES (?, ?, ?, ?, ?)
     """, responses)
+
+    conn.commit()
+
+def seed_faculty_mentor_data(conn):
+    cursor = conn.cursor()
+
+    # 1. Faculty Mentors
+    mentors = [
+        ("EMP-CS104", "Dr. K. V. Sharma", "Computer Science & Engineering",
+         "Professor & Chief Academic Mentor", "Ph.D. in Computer Science (IIT Bombay), M.Tech (Systems), B.E. CSE",
+         "Distributed Systems, Compiler Optimization, Cloud Native Architectures",
+         "CS603 Compiler Design, CS601 Distributed Systems, CS801 Cloud Computing",
+         "kv.sharma@college.edu", "+91 98450 12345", "Academic Block 3, Room CS-304 (3rd Floor)",
+         "Mon & Wed: 02:00 PM - 04:00 PM, Fri: 10:00 AM - 12:00 PM",
+         "",
+         "Dr. K. V. Sharma possesses over 18 years of academic teaching and engineering mentorship experience. Serves as Chief Mentor for the Department of Computer Science & Engineering."),
+
+        ("EMP-CS108", "Dr. Ramesh Rao", "Computer Science & Engineering",
+         "Professor & Head of Systems Lab", "Ph.D. High Performance Computing, M.Tech, B.E.",
+         "Operating Systems, Memory Hierarchies, Parallel Architecture",
+         "CS502 Operating Systems, CS605 Advanced Computer Architecture",
+         "ramesh.rao@college.edu", "+91 98451 98765", "Systems Block, Room CS-201 (2nd Floor)",
+         "Tue & Thu: 11:00 AM - 01:00 PM",
+         "",
+         "Leads collegiate systems research and kernel engineering labs with 15 years of doctoral and undergraduate mentoring."),
+
+        ("EMP-CS112", "Prof. Ananya Sen", "Computer Science & Engineering",
+         "Associate Professor & AI Lab In-Charge", "M.Tech (IISc Bangalore), B.Tech CSE",
+         "Machine Learning, Deep Neural Networks, Natural Language Processing",
+         "CS602 Machine Learning, CS606L ML & Data Engineering Lab",
+         "ananya.sen@college.edu", "+91 98452 34567", "AI & Data Engineering Wing, Room CS-410 (4th Floor)",
+         "Wed & Fri: 03:00 PM - 05:00 PM",
+         "",
+         "Published in top IEEE ML venues. Guides undergraduate research cohorts in applied artificial intelligence and medical informatics.")
+    ]
+    cursor.executemany("""
+    INSERT INTO faculty_mentors (faculty_id, name, department, designation, qualification, specialization, subjects_handled, email, phone, office_room, consultation_hours, photo_url, bio)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, mentors)
+
+    # 2. Mentor Assignments
+    assignments = [
+        (1, "1MS21CS084", "Alex Kumar", "Computer Science & Engineering", 6, "B", 1, "CSE Batch 2021-2025 Mentor Group A", "2024-08-01", "2025-2026", "Active"),
+        (101, "1MS21CS092", "Rohan Sharma", "Computer Science & Engineering", 6, "B", 1, "CSE Batch 2021-2025 Mentor Group A", "2024-08-01", "2025-2026", "Active"),
+        (102, "1MS21CS065", "Pooja Hegde", "Computer Science & Engineering", 6, "B", 1, "CSE Batch 2021-2025 Mentor Group A", "2024-08-01", "2025-2026", "Active"),
+        (103, "1MS21CS071", "Priya Nair", "Computer Science & Engineering", 6, "B", 1, "CSE Batch 2021-2025 Mentor Group A", "2024-08-01", "2025-2026", "Active"),
+        (104, "1MS21CS115", "Vikram Aditya", "Computer Science & Engineering", 6, "A", 2, "CSE Batch 2021-2025 Mentor Group B", "2024-08-01", "2025-2026", "Active"),
+        (105, "1MS21CS102", "Sneha Patil", "Computer Science & Engineering", 6, "C", 3, "CSE Batch 2021-2025 Mentor Group C", "2024-08-01", "2025-2026", "Active")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_assignments (student_id, usn, student_name, department, semester, section, mentor_id, group_name, assigned_date, academic_year, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, assignments)
+
+    # 3. Mentor Direct Messages (between Alex Kumar and Dr. K. V. Sharma)
+    messages = [
+        (1, 1, "Alex Kumar", "Dr. K. V. Sharma", "student", "Alex Kumar", "Guidance on Capstone Architecture",
+         "Good morning Dr. Sharma. I would like to seek your advice on selecting the consensus protocol for our capstone project on Autonomous Drone Telemetry Mesh.", "", 1, "2026-10-20 09:30:00"),
+        (1, 1, "Alex Kumar", "Dr. K. V. Sharma", "faculty", "Dr. K. V. Sharma", "Guidance on Capstone Architecture",
+         "Good morning Alex. For a low-latency edge mesh, Raft with lightweight heartbeats or an optimized gossip protocol will give you deterministic partition tolerance. Bring a 1-page architecture block diagram to our Wednesday consultation.", "", 1, "2026-10-20 11:15:00"),
+        (1, 1, "Alex Kumar", "Dr. K. V. Sharma", "student", "Alex Kumar", "Guidance on Capstone Architecture",
+         "Thank you Dr. Sharma! I will prepare the telemetry pipeline schematic and attend the Wednesday 02:30 PM slot.", "", 1, "2026-10-20 11:45:00"),
+        (1, 1, "Alex Kumar", "Dr. K. V. Sharma", "faculty", "Dr. K. V. Sharma", "Semester 6 Academic Progress",
+         "Alex, your CIE-1 marks in Compiler Design and ML are solid. Keep up the consistent laboratory log submissions.", "", 1, "2026-10-28 14:10:00"),
+        (1, 1, "Alex Kumar", "Dr. K. V. Sharma", "student", "Alex Kumar", "Semester 6 Academic Progress",
+         "Thank you Professor. I have also submitted the mid-term self-reflection in the Digital Mentor Book.", "", 0, "2026-10-28 15:05:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_messages (mentor_id, student_id, student_name, mentor_name, sender_role, sender_name, subject, message, attachment_file, is_read, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, messages)
+
+    # 4. Mentor Group Discussions
+    discussions = [
+        (1, "CSE Batch 2021-2025 Mentor Group A", 2, "Dr. K. V. Sharma", "faculty", "Announcement",
+         "Official Guidelines: Mid-Term Academic Review & Mentor Book Record Verification",
+         "Dear Mentees, the Semester 6 Mid-Term Academic Review sessions are scheduled for this week. Please review your Continuous Internal Evaluation marks, attendance percentages, and ensure all extracurricular or technical certification proofs are updated in your digital mentor book before booking your 1-on-1 consultation slot.",
+         "", 1, "Active", 48, "2026-10-22 09:00:00"),
+
+        (1, "CSE Batch 2021-2025 Mentor Group A", 101, "Rohan Sharma", "student", "Career",
+         "Recommended Preparation Strategy for GATE 2026 alongside Semester 6 Courses",
+         "Hello peers and Dr. Sharma, could anyone share their timetable schedule for revising core subjects like Operating Systems and Theory of Computation while keeping up with current semester lab submissions?",
+         "", 0, "Active", 35, "2026-10-25 14:30:00"),
+
+        (1, "CSE Batch 2021-2025 Mentor Group A", 1, "Alex Kumar", "student", "Study Material",
+         "Compiler Design: LL(1) Parsing Table Construction and Conflict Resolution Notes",
+         "I have uploaded solved sample problems on eliminating left recursion and computing FIRST & FOLLOW sets to our study notes repository. Let me know if anyone wants to do a quick review session before CIE-2.",
+         "", 0, "Active", 29, "2026-10-29 17:15:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_discussions (mentor_id, group_name, creator_id, creator_name, creator_role, category, title, content, attachment_file, is_pinned, status, views_count, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, discussions)
+
+    # 5. Discussion Replies
+    replies = [
+        (1, 1, "Alex Kumar", "student",
+         "Thank you Dr. Sharma. I have verified all 6 semester marks records and updated my AWS certification in the digital book.", "2026-10-22 10:15:00"),
+        (1, 102, "Pooja Hegde", "student",
+         "Confirmed Sir. I have checked my attendance log and verified that all 4 OD hours for the hackathon are recorded.", "2026-10-22 11:30:00"),
+        (2, 1, "Alex Kumar", "student",
+         "Rohan, I dedicate 1.5 hours every morning to standard PYQ problem sets before 9 AM classes. It prevents last-minute backlog.", "2026-10-25 16:00:00"),
+        (2, 2, "Dr. K. V. Sharma", "faculty",
+         "Focus heavily on discrete mathematics, system structures, and formal languages early in your preparation cycle. The Department will also conduct mock test series starting next month.", "2026-10-25 18:20:00"),
+        (3, 101, "Rohan Sharma", "student",
+         "Thanks Alex, these parsing walkthroughs made non-terminal substitution much easier to understand.", "2026-10-30 09:10:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_discussion_replies (discussion_id, author_id, author_name, author_role, reply_text, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, replies)
+
+    # 6. Online Meetings
+    meetings = [
+        (1, 1, "Alex Kumar", "1MS21CS084", "2026-11-06", "02:30 PM - 03:00 PM", "Academic Guidance",
+         "Semester 6 Mid-Term Performance Review and Compiler Design score optimization strategy.",
+         "Approved", "Google Meet", "https://meet.google.com/vzk-ymjw-qda",
+         "Approved. Please ensure your CIE answer scripts are available for review.", "2026-11-01 10:00:00", "2026-11-01 11:30:00"),
+
+        (1, 1, "Alex Kumar", "1MS21CS084", "2026-10-18", "11:00 AM - 11:30 AM", "Project Guidance",
+         "Capstone project architecture review and faculty guide consent.",
+         "Completed", "Google Meet", "https://meet.google.com/vzk-ymjw-qda",
+         "Session completed. Advised to implement Raft consensus with automated failover testing.", "2026-10-15 14:00:00", "2026-10-18 11:35:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_meetings (mentor_id, student_id, student_name, usn, requested_date, requested_slot, meeting_type, agenda, status, meeting_platform, meeting_link, mentor_notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, meetings)
+
+    # 7. Digital Mentor Book: Mentoring Meeting Records (Sessions)
+    sessions = [
+        (1, "1MS21CS084", "Alex Kumar", 1, "2026-10-24", "Mid-Term Progress Review", 6,
+         "Continuous Internal Evaluation (CIE-1) performance analysis, Compiler Design exam strategy, capstone milestone 1 status.",
+         "Felt time constraint during the syntax tree construction questions in CIE-1.",
+         "Advised student to complete timed LL(1) parsing table exercises and attend weekly departmental tutorial hours.",
+         "Complete Tutorial Exercise Sheet #3 before Nov 10; push capstone repository commit with distributed consensus testbench.",
+         "2026-11-15", "Dr. K. V. Sharma (Chief Academic Mentor)", "2026-10-24 16:00:00"),
+
+        (1, "1MS21CS084", "Alex Kumar", 1, "2026-05-12", "End-Term Performance & Career Guidance", 5,
+         "Review of Semester 5 SGPA (9.30), internship search criteria, resume preparation for pre-placement drives.",
+         "Selecting between systems software roles and enterprise full-stack development profiles.",
+         "Focus on distributed systems and low-level concurrency. Target systems engineering internships in tier-1 product organizations.",
+         "Upload updated 1-page PDF resume to Placement Cell; prepare GitHub repositories with clean documentation.",
+         "2026-08-20", "Dr. K. V. Sharma (Chief Academic Mentor)", "2026-05-12 15:30:00"),
+
+        (1, "1MS21CS084", "Alex Kumar", 1, "2025-11-10", "Semester Onboarding & Academic Planning", 5,
+         "Semester 5 course registration, elective selection (Cloud Computing vs Cryptography), academic target setting.",
+         "Inquiring if taking Cloud Computing will complement Semester 6 Distributed Systems.",
+         "Affirmed that Cloud Computing pairs strongly with Systems electives. Set target SGPA of >= 9.20.",
+         "Maintain > 85% attendance across all 6 theory subjects; register for AWS student credentials.",
+         "2025-12-18", "Dr. K. V. Sharma (Chief Academic Mentor)", "2025-11-10 14:00:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_book_sessions (student_id, usn, student_name, mentor_id, session_date, session_type, semester, topics_discussed, student_concerns, mentor_suggestions, action_items, next_meeting_date, recorded_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, sessions)
+
+    # 8. Digital Mentor Book: Official Mentor Remarks
+    remarks = [
+        (1, "1MS21CS084", 6, 1,
+         "Alex demonstrates exemplary academic consistency, analytical rigor, and deep conceptual understanding in core computing subjects. Maintained excellent lab regularity.",
+         "Strong systems problem-solving, rapid technical adaptability, peer leadership in group assignments, prompt lab completion.",
+         "Slight hesitation in descriptive long-form examinations; time allocation between multiple 10-mark questions.",
+         "Recommended to practice timed previous question papers and allocate time for mock interview presentation skills.",
+         "Recommended for tier-1 product campus placements, research fellowships, and the departmental Honors degree program.",
+         "Review CIE-2 scores in Compiler Design and verify capstone milestone 2 test reports.",
+         "Dr. K. V. Sharma (Chief Academic Mentor)", "2026-10-24 16:30:00"),
+
+        (1, "1MS21CS084", 5, 1,
+         "Outstanding overall performance in Semester 5 culminating in an SGPA of 9.30. Consistently engaged during lecture discussions.",
+         "High aptitude for system software and database internals; thorough documentation in laboratory assignments.",
+         "Could broaden participation in inter-college competitive hackathons.",
+         "Advised student to form a multidisciplinary hackathon team for the upcoming National Smart Campus competition.",
+         "Eligible for Departmental Merit Commendation.",
+         "Follow up on summer internship application status at CloudPulse Technologies.",
+         "Dr. K. V. Sharma (Chief Academic Mentor)", "2026-05-12 16:00:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_book_remarks (student_id, usn, semester, mentor_id, academic_observations, strengths, weaknesses, areas_requiring_improvement, mentor_recommendations, follow_up_notes, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, remarks)
+
+    # 9. Digital Mentor Book: Student Development
+    dev_records = [
+        (1, "1MS21CS084",
+         "Go, Python, C++, TypeScript, Rust (Basics), React.js, Docker, Kubernetes, PostgreSQL, Redis, Git, Linux Internals",
+         "Autonomous Drone Telemetry Mesh (Capstone), Distributed Key-Value Store with Raft Consensus, AI Radiogram Diagnostic Assistant",
+         "AWS Certified Cloud Practitioner (2025), HashiCorp Certified Terraform Associate (2025), Deep Learning Specialization (Coursera)",
+         "Systems Software Engineering Intern at CloudPulse Technologies (June 2025 - August 2025)",
+         "First Runner-Up at National Smart Campus Hackathon 2025; Dean's Honor Roll for Semesters 3, 4 and 5; 1st Place College Algorithmic Challenge",
+         "Lead Technical Coordinator at CSE Open Source Society; Active Member of University Chess Club and Robotics Wing",
+         "Alex Kumar (Verified by Dr. K. V. Sharma)", "2026-10-24 16:45:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_book_development (student_id, usn, technical_skills, projects, certifications, internship_details, achievements, extracurricular_activities, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, dev_records)
+
+    # 10. Student Feedback on Mentoring
+    feedback = [
+        (1, "1MS21CS084", "Alex Kumar", 1, 1, "Semester 6 Mid-Term Mentoring Review", 5, "Highly Beneficial",
+         "Dr. Sharma provided concrete, step-by-step guidance on how to master compiler parsing algorithms and suggested very helpful resources. The discussion on capstone architecture was highly actionable.",
+         "Would appreciate group mentoring mock-interview sessions for product companies.", "2026-10-25 10:00:00"),
+
+        (1, "1MS21CS084", "Alex Kumar", 1, 2, "Semester 5 Career & Internship Counseling", 5, "Highly Beneficial",
+         "The mentor's recommendation to pursue systems engineering internships gave me the confidence to apply to CloudPulse Technologies, where I had a successful internship.",
+         "Continue having individual 1-on-1 sessions at the end of each semester.", "2026-05-13 11:30:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_student_feedback (student_id, usn, student_name, mentor_id, meeting_id, session_title, rating, usefulness, feedback_text, suggestions, submitted_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, feedback)
+
+    # 11. Mentor Slots
+    slots = [
+        (1, "Monday", "02:00 PM", "04:00 PM", "Academic Block 3, Room CS-304 / Google Meet", 4, 1),
+        (1, "Wednesday", "02:00 PM", "04:00 PM", "Academic Block 3, Room CS-304 / Google Meet", 4, 1),
+        (1, "Friday", "10:00 AM", "12:00 PM", "Academic Block 3, Room CS-304 / Google Meet", 3, 1),
+        (2, "Tuesday", "11:00 AM", "01:00 PM", "Systems Block, Room CS-201 / Google Meet", 4, 1),
+        (2, "Thursday", "11:00 AM", "01:00 PM", "Systems Block, Room CS-201 / Google Meet", 4, 1),
+        (3, "Wednesday", "03:00 PM", "05:00 PM", "AI Wing, Room CS-410 / Google Meet", 4, 1),
+        (3, "Friday", "03:00 PM", "05:00 PM", "AI Wing, Room CS-410 / Google Meet", 4, 1)
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_slots (mentor_id, day_name, start_time, end_time, location_mode, max_slots, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, slots)
+
+    # 12. Mentor Audit Logs
+    audit_logs = [
+        (1, "1MS21CS084", "MENTOR_ASSIGNED", "Dean Academics", "admin",
+         "Assigned Dr. K. V. Sharma as official Faculty Mentor to Alex Kumar in CSE Batch 2021-2025 Group A.", "2024-08-01 10:00:00"),
+        (1, "1MS21CS084", "SESSION_RECORDED", "Dr. K. V. Sharma", "faculty",
+         "Logged Semester 6 Mid-Term Progress Review session and set follow-up actions.", "2026-10-24 16:00:00"),
+        (1, "1MS21CS084", "REMARKS_UPDATED", "Dr. K. V. Sharma", "faculty",
+         "Updated official mentor remarks and recommendations for Semester 6.", "2026-10-24 16:30:00"),
+        (1, "1MS21CS084", "MEETING_APPROVED", "Dr. K. V. Sharma", "faculty",
+         "Approved online meeting for 2026-11-06 with Google Meet link https://meet.google.com/vzk-ymjw-qda.", "2026-11-01 11:30:00"),
+        (1, "1MS21CS084", "FEEDBACK_SUBMITTED", "Alex Kumar", "student",
+         "Submitted 5-star mentoring session feedback for Semester 6 Mid-Term Review.", "2026-10-25 10:00:00")
+    ]
+    cursor.executemany("""
+    INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, audit_logs)
 
     conn.commit()
 

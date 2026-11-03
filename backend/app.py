@@ -3087,6 +3087,1541 @@ def update_doubt_status(doubt_id):
     conn.close()
     return jsonify({'message': f'Doubt status updated to {new_status}.'})
 
+# ==========================================================
+# 19. FACULTY MENTOR MODULE ENDPOINTS
+# ==========================================================
+
+@app.route('/api/mentor/my-mentor', methods=['GET'])
+def get_my_mentor():
+    student_id = request.args.get('student_id', 1, type=int)
+    role = request.args.get('role', 'student').strip().lower()
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if role == 'faculty':
+        cursor.execute("SELECT * FROM faculty_mentors ORDER BY id ASC LIMIT 1")
+        mentor = cursor.fetchone()
+        if not mentor:
+            conn.close()
+            return jsonify({'error': 'Faculty mentor profile not found.'}), 404
+        mentor_dict = dict(mentor)
+
+        cursor.execute("""
+            SELECT a.*, p.cgpa, p.overall_attendance, p.email, p.phone
+            FROM mentor_assignments a
+            LEFT JOIN student_profiles p ON a.student_id = p.user_id
+            WHERE a.mentor_id = ?
+            ORDER BY a.student_name ASC
+        """, (mentor_dict['id'],))
+        mentees = [dict(r) for r in cursor.fetchall()]
+        mentor_dict['mentees'] = mentees
+        mentor_dict['total_mentees'] = len(mentees)
+
+        cursor.execute("SELECT * FROM mentor_slots WHERE mentor_id = ? AND is_active = 1", (mentor_dict['id'],))
+        mentor_dict['slots'] = [dict(s) for s in cursor.fetchall()]
+
+        conn.close()
+        return jsonify(mentor_dict)
+
+    cursor.execute("""
+        SELECT a.id as assignment_id, a.student_id, a.usn, a.student_name, a.department as student_dept,
+               a.semester as student_sem, a.section, a.group_name, a.assigned_date, a.academic_year, a.status as assignment_status,
+               m.id as mentor_id, m.faculty_id, m.name as mentor_name, m.department as mentor_dept,
+               m.designation as mentor_designation, m.qualification as mentor_qualification,
+               m.specialization as mentor_specialization, m.subjects_handled, m.email as mentor_email,
+               m.phone as mentor_phone, m.office_room, m.consultation_hours, m.photo_url, m.bio
+        FROM mentor_assignments a
+        JOIN faculty_mentors m ON a.mentor_id = m.id
+        WHERE a.student_id = ?
+    """, (student_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            SELECT a.id as assignment_id, a.student_id, a.usn, a.student_name, a.department as student_dept,
+                   a.semester as student_sem, a.section, a.group_name, a.assigned_date, a.academic_year, a.status as assignment_status,
+                   m.id as mentor_id, m.faculty_id, m.name as mentor_name, m.department as mentor_dept,
+                   m.designation as mentor_designation, m.qualification as mentor_qualification,
+                   m.specialization as mentor_specialization, m.subjects_handled, m.email as mentor_email,
+                   m.phone as mentor_phone, m.office_room, m.consultation_hours, m.photo_url, m.bio
+            FROM mentor_assignments a
+            JOIN faculty_mentors m ON a.mentor_id = m.id
+            ORDER BY a.id ASC LIMIT 1
+        """)
+        row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({'error': 'No assigned faculty mentor found.'}), 404
+
+    result = dict(row)
+    mentor_id = result['mentor_id']
+
+    cursor.execute("""
+        SELECT a.student_id, a.usn, a.student_name, a.department, a.semester, a.section,
+               p.cgpa, p.overall_attendance, p.email
+        FROM mentor_assignments a
+        LEFT JOIN student_profiles p ON a.student_id = p.user_id
+        WHERE a.mentor_id = ?
+        ORDER BY a.student_name ASC
+    """, (mentor_id,))
+    result['peers'] = [dict(p) for p in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM mentor_slots WHERE mentor_id = ? AND is_active = 1", (mentor_id,))
+    result['slots'] = [dict(s) for s in cursor.fetchall()]
+
+    conn.close()
+    return jsonify(result)
+
+@app.route('/api/mentor/profile/<int:mentor_id>', methods=['GET'])
+def get_mentor_profile(mentor_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM faculty_mentors WHERE id = ?", (mentor_id,))
+    mentor = cursor.fetchone()
+    if not mentor:
+        conn.close()
+        return jsonify({'error': 'Faculty mentor not found.'}), 404
+
+    mentor_dict = dict(mentor)
+    cursor.execute("SELECT COUNT(*) FROM mentor_assignments WHERE mentor_id = ?", (mentor_id,))
+    mentor_dict['mentees_count'] = cursor.fetchone()[0]
+
+    cursor.execute("SELECT * FROM mentor_slots WHERE mentor_id = ? AND is_active = 1", (mentor_id,))
+    mentor_dict['slots'] = [dict(s) for s in cursor.fetchall()]
+
+    conn.close()
+    return jsonify(mentor_dict)
+
+@app.route('/api/mentor/messages', methods=['GET', 'POST'])
+def handle_mentor_messages():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        mentor_id = data.get('mentor_id', 1)
+        student_id = data.get('student_id', 1)
+        sender_role = (data.get('sender_role') or 'student').strip().lower()
+        sender_name = (data.get('sender_name') or 'Alex Kumar').strip()
+        message = (data.get('message') or '').strip()
+        subject = (data.get('subject') or 'Mentoring Inquiry').strip()
+
+        if not message:
+            conn.close()
+            return jsonify({'error': 'Message content cannot be empty.'}), 400
+
+        cursor.execute("SELECT name FROM faculty_mentors WHERE id = ?", (mentor_id,))
+        m_row = cursor.fetchone()
+        mentor_name = m_row['name'] if m_row else 'Faculty Mentor'
+
+        cursor.execute("SELECT student_name FROM mentor_assignments WHERE student_id = ?", (student_id,))
+        s_row = cursor.fetchone()
+        student_name = s_row['student_name'] if s_row else 'Student'
+
+        cursor.execute("""
+            INSERT INTO mentor_messages (mentor_id, student_id, student_name, mentor_name, sender_role, sender_name, subject, message, is_read)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (mentor_id, student_id, student_name, mentor_name, sender_role, sender_name, subject, message))
+        conn.commit()
+        new_id = cursor.lastrowid
+        conn.close()
+        return jsonify({'message': 'Message sent successfully.', 'id': new_id}), 201
+
+    student_id = request.args.get('student_id', 1, type=int)
+    mentor_id = request.args.get('mentor_id', type=int)
+
+    if mentor_id:
+        cursor.execute("""
+            SELECT * FROM mentor_messages
+            WHERE mentor_id = ? AND student_id = ?
+            ORDER BY created_at ASC
+        """, (mentor_id, student_id))
+    else:
+        cursor.execute("""
+            SELECT * FROM mentor_messages
+            WHERE student_id = ?
+            ORDER BY created_at ASC
+        """, (student_id,))
+
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+@app.route('/api/mentor/discussions', methods=['GET', 'POST'])
+def handle_mentor_discussions():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        mentor_id = data.get('mentor_id', 1)
+        group_name = data.get('group_name', 'CSE Batch 2021-2025 Mentor Group A')
+        creator_id = data.get('creator_id', 1)
+        creator_name = (data.get('creator_name') or 'Alex Kumar').strip()
+        creator_role = (data.get('creator_role') or 'student').strip().lower()
+        category = (data.get('category') or 'Academic').strip()
+        title = (data.get('title') or '').strip()
+        content = (data.get('content') or '').strip()
+
+        if not title or not content:
+            conn.close()
+            return jsonify({'error': 'Discussion title and content are required.'}), 400
+
+        is_pinned = 1 if (creator_role == 'faculty' and data.get('is_pinned')) else 0
+
+        cursor.execute("""
+            INSERT INTO mentor_discussions (mentor_id, group_name, creator_id, creator_name, creator_role, category, title, content, is_pinned, status, views_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', 1)
+        """, (mentor_id, group_name, creator_id, creator_name, creator_role, category, title, content, is_pinned))
+        conn.commit()
+        disc_id = cursor.lastrowid
+        conn.close()
+        return jsonify({'message': 'Discussion topic created successfully.', 'id': disc_id}), 201
+
+    mentor_id = request.args.get('mentor_id', 1, type=int)
+    category = request.args.get('category', '').strip()
+    search = request.args.get('search', '').strip().lower()
+
+    query = "SELECT * FROM mentor_discussions WHERE mentor_id = ? AND status != 'Archived'"
+    params = [mentor_id]
+
+    if category and category != 'All':
+        query += " AND category = ?"
+        params.append(category)
+
+    if search:
+        query += " AND (LOWER(title) LIKE ? OR LOWER(content) LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%"])
+
+    query += " ORDER BY is_pinned DESC, created_at DESC"
+    cursor.execute(query, params)
+    topics = [dict(t) for t in cursor.fetchall()]
+
+    for t in topics:
+        cursor.execute("""
+            SELECT * FROM mentor_discussion_replies
+            WHERE discussion_id = ?
+            ORDER BY created_at ASC
+        """, (t['id'],))
+        t['replies'] = [dict(r) for r in cursor.fetchall()]
+        t['replies_count'] = len(t['replies'])
+
+    conn.close()
+    return jsonify(topics)
+
+@app.route('/api/mentor/discussions/<int:topic_id>/reply', methods=['POST'])
+def add_discussion_reply(topic_id):
+    data = request.get_json() or {}
+    reply_text = (data.get('reply_text') or '').strip()
+    author_name = (data.get('author_name') or 'Alex Kumar').strip()
+    author_role = (data.get('author_role') or 'student').strip().lower()
+    author_id = data.get('author_id', 1)
+
+    if not reply_text:
+        return jsonify({'error': 'Reply text cannot be empty.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO mentor_discussion_replies (discussion_id, author_id, author_name, author_role, reply_text)
+        VALUES (?, ?, ?, ?, ?)
+    """, (topic_id, author_id, author_name, author_role, reply_text))
+    cursor.execute("UPDATE mentor_discussions SET views_count = views_count + 1 WHERE id = ?", (topic_id,))
+    conn.commit()
+    new_reply_id = cursor.lastrowid
+    conn.close()
+    return jsonify({'message': 'Reply posted successfully.', 'reply_id': new_reply_id}), 201
+
+@app.route('/api/mentor/discussions/<int:topic_id>/pin', methods=['PUT'])
+def toggle_pin_discussion(topic_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_pinned FROM mentor_discussions WHERE id = ?", (topic_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Topic not found.'}), 404
+
+    new_pin = 0 if row['is_pinned'] else 1
+    cursor.execute("UPDATE mentor_discussions SET is_pinned = ? WHERE id = ?", (new_pin, topic_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': f"Discussion topic {'pinned' if new_pin else 'unpinned'} successfully.", 'is_pinned': new_pin})
+
+@app.route('/api/mentor/discussions/<int:topic_id>', methods=['DELETE'])
+def delete_discussion(topic_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM mentor_discussion_replies WHERE discussion_id = ?", (topic_id,))
+    cursor.execute("DELETE FROM mentor_discussions WHERE id = ?", (topic_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Discussion topic deleted successfully.'})
+
+@app.route('/api/mentor/meetings', methods=['GET'])
+def get_mentor_meetings():
+    student_id = request.args.get('student_id', type=int)
+    mentor_id = request.args.get('mentor_id', type=int)
+    role = request.args.get('role', 'student').strip().lower()
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if role == 'faculty' and mentor_id:
+        cursor.execute("SELECT * FROM mentor_meetings WHERE mentor_id = ? ORDER BY requested_date DESC, id DESC", (mentor_id,))
+    elif role == 'admin':
+        cursor.execute("SELECT * FROM mentor_meetings ORDER BY requested_date DESC, id DESC")
+    else:
+        sid = student_id or 1
+        cursor.execute("SELECT * FROM mentor_meetings WHERE student_id = ? ORDER BY requested_date DESC, id DESC", (sid,))
+
+    meetings = [dict(m) for m in cursor.fetchall()]
+    conn.close()
+    return jsonify(meetings)
+
+@app.route('/api/mentor/meetings/request', methods=['POST'])
+def request_meeting():
+    data = request.get_json() or {}
+    mentor_id = data.get('mentor_id', 1)
+    student_id = data.get('student_id', 1)
+    student_name = (data.get('student_name') or 'Alex Kumar').strip()
+    usn = (data.get('usn') or '1MS21CS084').strip()
+    requested_date = (data.get('requested_date') or '').strip()
+    requested_slot = (data.get('requested_slot') or '').strip()
+    meeting_type = (data.get('meeting_type') or 'Academic Guidance').strip()
+    agenda = (data.get('agenda') or '').strip()
+    platform = (data.get('meeting_platform') or 'Google Meet').strip()
+
+    if not requested_date or not requested_slot or not agenda:
+        return jsonify({'error': 'Date, time slot, and meeting agenda are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO mentor_meetings (mentor_id, student_id, student_name, usn, requested_date, requested_slot, meeting_type, agenda, status, meeting_platform, meeting_link)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Requested', ?, '')
+    """, (mentor_id, student_id, student_name, usn, requested_date, requested_slot, meeting_type, agenda, platform))
+
+    meeting_id = cursor.lastrowid
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'MEETING_REQUESTED', ?, 'student', ?)
+    """, (student_id, usn, student_name, f"Requested {meeting_type} meeting for {requested_date} at {requested_slot}."))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Meeting request submitted successfully.', 'id': meeting_id}), 201
+
+@app.route('/api/mentor/meetings/<int:meeting_id>/status', methods=['PUT'])
+def update_meeting_status(meeting_id):
+    data = request.get_json() or {}
+    new_status = (data.get('status') or '').strip()
+    meeting_link = (data.get('meeting_link') or '').strip()
+    mentor_notes = (data.get('mentor_notes') or '').strip()
+
+    if new_status not in ['Requested', 'Approved', 'Rejected', 'Completed']:
+        return jsonify({'error': 'Invalid meeting status.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM mentor_meetings WHERE id = ?", (meeting_id,))
+    meeting = cursor.fetchone()
+    if not meeting:
+        conn.close()
+        return jsonify({'error': 'Meeting record not found.'}), 404
+
+    if new_status == 'Approved' and not meeting_link:
+        meeting_link = "https://meet.google.com/vzk-ymjw-qda"
+
+    cursor.execute("""
+        UPDATE mentor_meetings
+        SET status = ?, meeting_link = ?, mentor_notes = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (new_status, meeting_link, mentor_notes, meeting_id))
+
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'MEETING_STATUS_CHANGED', 'Dr. K. V. Sharma', 'faculty', ?)
+    """, (meeting['student_id'], meeting['usn'], f"Meeting #{meeting_id} status changed to {new_status}."))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': f'Meeting marked as {new_status}.', 'meeting_link': meeting_link})
+
+@app.route('/api/mentor/mentor-book', methods=['GET'])
+def get_digital_mentor_book():
+    student_id = request.args.get('student_id', 1, type=int)
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT p.*, u.email as user_email, u.name as user_name, u.identifier as user_usn,
+               a.group_name, a.assigned_date, a.academic_year,
+               m.id as mentor_id, m.name as mentor_name, m.faculty_id as mentor_faculty_id,
+               m.department as mentor_department, m.designation as mentor_designation,
+               m.email as mentor_email, m.phone as mentor_phone, m.office_room as mentor_office
+        FROM student_profiles p
+        JOIN users u ON p.user_id = u.id
+        LEFT JOIN mentor_assignments a ON a.student_id = p.user_id
+        LEFT JOIN faculty_mentors m ON a.mentor_id = m.id
+        WHERE p.user_id = ?
+    """, (student_id,))
+    student_info = cursor.fetchone()
+
+    if not student_info:
+        cursor.execute("""
+            SELECT p.*, u.email as user_email, u.name as user_name, u.identifier as user_usn,
+                   a.group_name, a.assigned_date, a.academic_year,
+                   m.id as mentor_id, m.name as mentor_name, m.faculty_id as mentor_faculty_id,
+                   m.department as mentor_department, m.designation as mentor_designation,
+                   m.email as mentor_email, m.phone as mentor_phone, m.office_room as mentor_office
+            FROM student_profiles p
+            JOIN users u ON p.user_id = u.id
+            LEFT JOIN mentor_assignments a ON a.student_id = p.user_id
+            LEFT JOIN faculty_mentors m ON a.mentor_id = m.id
+            LIMIT 1
+        """)
+        student_info = cursor.fetchone()
+
+    info_dict = dict(student_info) if student_info else {}
+
+    cursor.execute("SELECT * FROM semester_gpa_history WHERE student_id = ? ORDER BY semester ASC", (student_id,))
+    gpa_history = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM academic_marks WHERE user_id = ? ORDER BY semester DESC, course_code ASC", (student_id,))
+    marks_records = [dict(m) for m in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM attendance WHERE user_id = ? ORDER BY course_code ASC", (student_id,))
+    attendance_records = [dict(a) for a in cursor.fetchall()]
+
+    total_conducted = sum(r.get('total_hours', 0) for r in attendance_records)
+    total_attended = sum(r.get('attended_hours', 0) for r in attendance_records)
+    total_od = sum(r.get('od_hours', 0) for r in attendance_records)
+    overall_att_pct = round((total_attended / total_conducted * 100), 2) if total_conducted > 0 else 88.4
+
+    cursor.execute("SELECT * FROM mentor_book_sessions WHERE student_id = ? ORDER BY session_date DESC, id DESC", (student_id,))
+    sessions = [dict(s) for s in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM mentor_book_development WHERE student_id = ?", (student_id,))
+    dev_row = cursor.fetchone()
+    development = dict(dev_row) if dev_row else {
+        'technical_skills': 'Python, Go, C++, React.js, Docker, Git',
+        'projects': 'Autonomous Drone Telemetry Mesh',
+        'certifications': 'AWS Certified Cloud Practitioner',
+        'internship_details': 'Systems Software Intern at CloudPulse Technologies',
+        'achievements': 'First Runner-Up at National Smart Campus Hackathon',
+        'extracurricular_activities': 'Technical Lead at CSE Open Source Society'
+    }
+
+    cursor.execute("SELECT * FROM mentor_book_remarks WHERE student_id = ? ORDER BY semester DESC", (student_id,))
+    remarks = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM mentor_student_feedback WHERE student_id = ? ORDER BY submitted_at DESC", (student_id,))
+    feedback_list = [dict(f) for f in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM mentor_audit_logs WHERE student_id = ? ORDER BY created_at DESC LIMIT 15", (student_id,))
+    audit_logs = [dict(l) for l in cursor.fetchall()]
+
+    conn.close()
+
+    return jsonify({
+        'student_info': info_dict,
+        'academics': {
+            'cgpa': info_dict.get('cgpa', 9.12),
+            'gpa_history': gpa_history,
+            'subject_marks': marks_records
+        },
+        'attendance': {
+            'overall_percentage': overall_att_pct,
+            'total_conducted': total_conducted,
+            'total_attended': total_attended,
+            'total_od': total_od,
+            'records': attendance_records,
+            'status': 'Eligible for Examinations' if overall_att_pct >= 75.0 else 'Shortage Alert'
+        },
+        'sessions': sessions,
+        'development': development,
+        'remarks': remarks,
+        'feedback': feedback_list,
+        'audit_logs': audit_logs
+    })
+
+@app.route('/api/mentor/mentor-book/session', methods=['POST'])
+def add_mentor_book_session():
+    data = request.get_json() or {}
+    student_id = data.get('student_id', 1)
+    usn = (data.get('usn') or '1MS21CS084').strip()
+    student_name = (data.get('student_name') or 'Alex Kumar').strip()
+    mentor_id = data.get('mentor_id', 1)
+    session_date = (data.get('session_date') or '').strip()
+    session_type = (data.get('session_type') or 'Progress Review').strip()
+    semester = data.get('semester', 6)
+    topics = (data.get('topics_discussed') or '').strip()
+    concerns = (data.get('student_concerns') or '').strip()
+    suggestions = (data.get('mentor_suggestions') or '').strip()
+    action_items = (data.get('action_items') or '').strip()
+    next_date = (data.get('next_meeting_date') or '').strip()
+    recorded_by = (data.get('recorded_by') or 'Dr. K. V. Sharma (Faculty Mentor)').strip()
+
+    if not session_date or not topics or not suggestions:
+        return jsonify({'error': 'Session date, topics discussed, and mentor suggestions are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO mentor_book_sessions (student_id, usn, student_name, mentor_id, session_date, session_type, semester, topics_discussed, student_concerns, mentor_suggestions, action_items, next_meeting_date, recorded_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (student_id, usn, student_name, mentor_id, session_date, session_type, semester, topics, concerns, suggestions, action_items, next_date, recorded_by))
+
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'SESSION_RECORDED', ?, 'faculty', ?)
+    """, (student_id, usn, recorded_by, f"Logged {session_type} mentoring session for Semester {semester} on {session_date}."))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Mentoring session record added successfully.'}), 201
+
+@app.route('/api/mentor/mentor-book/remarks', methods=['PUT'])
+def update_mentor_remarks():
+    data = request.get_json() or {}
+    student_id = data.get('student_id', 1)
+    usn = (data.get('usn') or '1MS21CS084').strip()
+    semester = data.get('semester', 6)
+    mentor_id = data.get('mentor_id', 1)
+    obs = (data.get('academic_observations') or '').strip()
+    strengths = (data.get('strengths') or '').strip()
+    weaknesses = (data.get('weaknesses') or '').strip()
+    improvement = (data.get('areas_requiring_improvement') or '').strip()
+    recs = (data.get('mentor_recommendations') or '').strip()
+    followup = (data.get('follow_up_notes') or '').strip()
+    updated_by = (data.get('updated_by') or 'Dr. K. V. Sharma (Chief Academic Mentor)').strip()
+
+    if not obs or not recs:
+        return jsonify({'error': 'Academic observations and mentor recommendations are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO mentor_book_remarks (student_id, usn, semester, mentor_id, academic_observations, strengths, weaknesses, areas_requiring_improvement, mentor_recommendations, follow_up_notes, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(student_id, semester) DO UPDATE SET
+            academic_observations = excluded.academic_observations,
+            strengths = excluded.strengths,
+            weaknesses = excluded.weaknesses,
+            areas_requiring_improvement = excluded.areas_requiring_improvement,
+            mentor_recommendations = excluded.mentor_recommendations,
+            follow_up_notes = excluded.follow_up_notes,
+            updated_by = excluded.updated_by,
+            updated_at = CURRENT_TIMESTAMP
+    """, (student_id, usn, semester, mentor_id, obs, strengths, weaknesses, improvement, recs, followup, updated_by))
+
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'REMARKS_UPDATED', ?, 'faculty', ?)
+    """, (student_id, usn, updated_by, f"Updated official mentor remarks for Semester {semester}."))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Official mentor remarks updated successfully.'})
+
+@app.route('/api/mentor/mentor-book/development', methods=['PUT'])
+def update_student_development():
+    data = request.get_json() or {}
+    student_id = data.get('student_id', 1)
+    usn = (data.get('usn') or '1MS21CS084').strip()
+    skills = (data.get('technical_skills') or '').strip()
+    projects = (data.get('projects') or '').strip()
+    certifications = (data.get('certifications') or '').strip()
+    internships = (data.get('internship_details') or '').strip()
+    achievements = (data.get('achievements') or '').strip()
+    extracurricular = (data.get('extracurricular_activities') or '').strip()
+    updated_by = (data.get('updated_by') or 'Alex Kumar').strip()
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO mentor_book_development (student_id, usn, technical_skills, projects, certifications, internship_details, achievements, extracurricular_activities, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(student_id) DO UPDATE SET
+            technical_skills = excluded.technical_skills,
+            projects = excluded.projects,
+            certifications = excluded.certifications,
+            internship_details = excluded.internship_details,
+            achievements = excluded.achievements,
+            extracurricular_activities = excluded.extracurricular_activities,
+            updated_by = excluded.updated_by,
+            updated_at = CURRENT_TIMESTAMP
+    """, (student_id, usn, skills, projects, certifications, internships, achievements, extracurricular, updated_by))
+
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'DEVELOPMENT_UPDATED', ?, 'student', 'Updated student technical skills and development portfolio.')
+    """, (student_id, usn, updated_by))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Student development records updated successfully.'})
+
+@app.route('/api/mentor/mentor-book/feedback', methods=['POST'])
+def submit_student_feedback():
+    data = request.get_json() or {}
+    student_id = data.get('student_id', 1)
+    usn = (data.get('usn') or '1MS21CS084').strip()
+    student_name = (data.get('student_name') or 'Alex Kumar').strip()
+    mentor_id = data.get('mentor_id', 1)
+    meeting_id = data.get('meeting_id')
+    title = (data.get('session_title') or 'Mentoring Guidance Session').strip()
+    rating = data.get('rating', 5)
+    usefulness = (data.get('usefulness') or 'Highly Beneficial').strip()
+    feedback_text = (data.get('feedback_text') or '').strip()
+    suggestions = (data.get('suggestions') or '').strip()
+
+    if not feedback_text:
+        return jsonify({'error': 'Feedback text is required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO mentor_student_feedback (student_id, usn, student_name, mentor_id, meeting_id, session_title, rating, usefulness, feedback_text, suggestions)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (student_id, usn, student_name, mentor_id, meeting_id, title, rating, usefulness, feedback_text, suggestions))
+
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'FEEDBACK_SUBMITTED', ?, 'student', ?)
+    """, (student_id, usn, student_name, f"Submitted {rating}-star mentoring session feedback for '{title}'."))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Mentoring session feedback recorded successfully.'}), 201
+
+@app.route('/api/mentor/admin/overview', methods=['GET'])
+def get_admin_mentor_overview():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT m.*, COUNT(a.id) as mentees_count
+        FROM faculty_mentors m
+        LEFT JOIN mentor_assignments a ON m.id = a.mentor_id
+        GROUP BY m.id
+        ORDER BY m.id ASC
+    """)
+    mentors = [dict(m) for m in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT a.*, p.cgpa, p.overall_attendance, p.email, p.phone, m.name as mentor_name, m.faculty_id as mentor_faculty_id
+        FROM mentor_assignments a
+        LEFT JOIN student_profiles p ON a.student_id = p.user_id
+        LEFT JOIN faculty_mentors m ON a.mentor_id = m.id
+        ORDER BY a.group_name ASC, a.student_name ASC
+    """)
+    assigned_students = [dict(s) for s in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT a.group_name, a.mentor_id, m.name as mentor_name, a.department, a.semester, a.academic_year,
+               COUNT(a.id) as total_students
+        FROM mentor_assignments a
+        LEFT JOIN faculty_mentors m ON a.mentor_id = m.id
+        GROUP BY a.group_name, a.mentor_id
+        ORDER BY a.group_name ASC
+    """)
+    groups = [dict(g) for g in cursor.fetchall()]
+
+    cursor.execute("SELECT COUNT(*) FROM faculty_mentors")
+    total_mentors = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM mentor_assignments")
+    total_assigned_students = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM mentor_book_sessions")
+    total_sessions_logged = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM mentor_meetings WHERE status = 'Requested'")
+    pending_meetings = cursor.fetchone()[0]
+
+    cursor.execute("SELECT AVG(rating) FROM mentor_student_feedback")
+    avg_feedback_rating = round(cursor.fetchone()[0] or 5.0, 2)
+
+    cursor.execute("SELECT COUNT(*) FROM mentor_discussions")
+    total_discussions = cursor.fetchone()[0]
+
+    cursor.execute("SELECT * FROM mentor_audit_logs ORDER BY created_at DESC LIMIT 20")
+    audit_logs = [dict(l) for l in cursor.fetchall()]
+
+    conn.close()
+
+    return jsonify({
+        'mentors': mentors,
+        'assigned_students': assigned_students,
+        'groups': groups,
+        'metrics': {
+            'total_mentors': total_mentors,
+            'total_assigned_students': total_assigned_students,
+            'total_sessions_logged': total_sessions_logged,
+            'pending_meetings': pending_meetings,
+            'avg_feedback_rating': avg_feedback_rating,
+            'total_discussions': total_discussions
+        },
+        'audit_logs': audit_logs
+    })
+
+@app.route('/api/mentor/admin/assign', methods=['POST'])
+def admin_assign_mentor():
+    data = request.get_json() or {}
+    student_id = data.get('student_id')
+    mentor_id = data.get('mentor_id')
+    group_name = (data.get('group_name') or 'CSE Batch 2021-2025 Mentor Group A').strip()
+
+    if not student_id or not mentor_id:
+        return jsonify({'error': 'Student ID and Mentor ID are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, identifier, department, semester FROM users WHERE id = ?", (student_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'error': 'Student user record not found.'}), 404
+
+    cursor.execute("SELECT name FROM faculty_mentors WHERE id = ?", (mentor_id,))
+    mentor = cursor.fetchone()
+    if not mentor:
+        conn.close()
+        return jsonify({'error': 'Faculty mentor not found.'}), 404
+
+    cursor.execute("""
+        INSERT INTO mentor_assignments (student_id, usn, student_name, department, semester, section, mentor_id, group_name, assigned_date, academic_year, status)
+        VALUES (?, ?, ?, ?, ?, 'B', ?, ?, CURRENT_DATE, '2025-2026', 'Active')
+        ON CONFLICT(student_id) DO UPDATE SET
+            mentor_id = excluded.mentor_id,
+            group_name = excluded.group_name,
+            assigned_date = CURRENT_DATE,
+            status = 'Active'
+    """, (student_id, user['identifier'], user['name'], user['department'], user['semester'] or 6, mentor_id, group_name))
+
+    cursor.execute("""
+        INSERT INTO mentor_audit_logs (student_id, usn, action_type, performed_by, role, description)
+        VALUES (?, ?, 'MENTOR_REASSIGNED', 'Dean Academics', 'admin', ?)
+    """, (student_id, user['identifier'], f"Assigned mentor {mentor['name']} (Group: {group_name}) to {user['name']}."))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': f"Assigned mentor {mentor['name']} to student {user['name']} successfully."})
+
+@app.route('/api/mentor/mentees', methods=['GET'])
+def get_faculty_mentees():
+    mentor_id = request.args.get('mentor_id', 1, type=int)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.*, p.cgpa, p.overall_attendance, p.email, p.phone,
+               (SELECT session_date FROM mentor_book_sessions WHERE student_id = a.student_id ORDER BY session_date DESC LIMIT 1) as last_session_date
+        FROM mentor_assignments a
+        LEFT JOIN student_profiles p ON a.student_id = p.user_id
+        WHERE a.mentor_id = ?
+        ORDER BY a.student_name ASC
+    """, (mentor_id,))
+    mentees = [dict(m) for m in cursor.fetchall()]
+    conn.close()
+    return jsonify(mentees)
+
+# ==========================================================
+# 20. FEES MANAGEMENT MODULE ENDPOINTS
+# ==========================================================
+
+import uuid
+
+
+def _generate_txn_id():
+    return f"TXN-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+
+
+def _generate_receipt_number():
+    return f"RCP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+
+
+@app.route('/api/fees/student-details', methods=['GET'])
+def get_student_fee_details():
+    """Return student profile + fee summary for a given semester."""
+    student_id = request.args.get('student_id', 1, type=int)
+    semester = request.args.get('semester', type=int)
+    academic_year = request.args.get('academic_year', '2025-2026')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Resolve student profile
+    cursor.execute("""
+        SELECT p.*, u.name, u.identifier as usn_u, u.department as dept_u, u.semester as sem_u
+        FROM student_profiles p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.user_id = ?
+    """, (student_id,))
+    profile = cursor.fetchone()
+    if not profile:
+        cursor.execute("""
+            SELECT p.*, u.name, u.identifier as usn_u, u.department as dept_u, u.semester as sem_u
+            FROM student_profiles p
+            JOIN users u ON p.user_id = u.id
+            LIMIT 1
+        """)
+        profile = cursor.fetchone()
+
+    if not profile:
+        conn.close()
+        return jsonify({'error': 'Student profile not found.'}), 404
+
+    profile_dict = dict(profile)
+    target_sem = semester or profile_dict.get('sem_u') or profile_dict.get('semester', 6)
+
+    # Fetch fee records for target semester
+    cursor.execute("""
+        SELECT r.*, fs.due_date, fs.description, fs.partial_payment_allowed
+        FROM student_fee_records r
+        JOIN fee_structures fs ON r.fee_structure_id = fs.id
+        WHERE r.student_id = ? AND r.semester = ? AND r.academic_year = ?
+        ORDER BY r.fee_category ASC
+    """, (student_id, target_sem, academic_year))
+    fee_records = [dict(r) for r in cursor.fetchall()]
+
+    if not fee_records:
+        # Build from structure if no personal record exists
+        cursor.execute("""
+            SELECT * FROM fee_structures
+            WHERE department = ? AND semester = ? AND academic_year = ? AND is_active = 1
+            ORDER BY fee_category ASC
+        """, (profile_dict.get('dept_u', 'Computer Science & Engineering'), target_sem, academic_year))
+        structures = cursor.fetchall()
+        fee_records = [{
+            **dict(s),
+            'fee_structure_id': s['id'],
+            'amount_paid': 0.0,
+            'outstanding_amount': s['total_amount'],
+            'payment_status': 'Pending',
+            'student_id': student_id,
+        } for s in structures]
+
+    total_payable = sum(r['total_amount'] for r in fee_records)
+    total_paid = sum(r['amount_paid'] for r in fee_records)
+    total_outstanding = sum(r['outstanding_amount'] for r in fee_records)
+
+    # Available semesters for this student
+    cursor.execute("""
+        SELECT DISTINCT semester FROM student_fee_records
+        WHERE student_id = ? ORDER BY semester DESC
+    """, (student_id,))
+    available_sems = [row['semester'] for row in cursor.fetchall()] or [target_sem]
+
+    conn.close()
+
+    return jsonify({
+        'student': {
+            'name': profile_dict.get('name', 'Alex Kumar'),
+            'usn': profile_dict.get('usn') or profile_dict.get('usn_u', '1MS21CS084'),
+            'department': profile_dict.get('department') or profile_dict.get('dept_u'),
+            'semester': target_sem,
+            'academic_year': academic_year,
+            'section': profile_dict.get('section', 'B'),
+            'cgpa': profile_dict.get('cgpa', 9.12),
+        },
+        'fee_records': fee_records,
+        'summary': {
+            'total_payable': round(total_payable, 2),
+            'total_paid': round(total_paid, 2),
+            'total_outstanding': round(total_outstanding, 2),
+            'semester': target_sem,
+            'academic_year': academic_year,
+        },
+        'available_semesters': available_sems,
+    })
+
+
+@app.route('/api/fees/payment/initiate', methods=['POST'])
+def initiate_fee_payment():
+    """
+    Initiate a demo payment transaction.
+    In production this would call a real payment gateway and return a session/order ID.
+    Here we return a demo order_id and the full amount for client to confirm.
+    We do NOT mark the transaction as Successful at this stage.
+    """
+    data = request.get_json() or {}
+    student_id = data.get('student_id', 1)
+    semester = data.get('semester', 6)
+    academic_year = data.get('academic_year', '2025-2026')
+    selected_record_ids = data.get('selected_record_ids', [])  # list of student_fee_record ids
+    payment_amount = data.get('payment_amount', 0.0)
+    payment_method = data.get('payment_method', 'Demo')
+
+    if payment_amount <= 0:
+        return jsonify({'error': 'Payment amount must be greater than zero.'}), 400
+    if not selected_record_ids:
+        return jsonify({'error': 'At least one fee component must be selected for payment.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Validate records belong to this student
+    placeholders = ','.join(['?' for _ in selected_record_ids])
+    cursor.execute(f"""
+        SELECT id, fee_category, outstanding_amount FROM student_fee_records
+        WHERE id IN ({placeholders}) AND student_id = ?
+    """, selected_record_ids + [student_id])
+    records = cursor.fetchall()
+    if len(records) != len(selected_record_ids):
+        conn.close()
+        return jsonify({'error': 'Invalid fee record selection.'}), 400
+
+    total_outstanding = sum(r['outstanding_amount'] for r in records)
+    if payment_amount > total_outstanding + 0.01:
+        conn.close()
+        return jsonify({'error': f'Payment amount Rs. {payment_amount:,.2f} exceeds outstanding balance Rs. {total_outstanding:,.2f}.'}), 400
+
+    # Build breakdown
+    breakdown = {r['fee_category']: min(r['outstanding_amount'], payment_amount) for r in records}
+    fee_categories_str = ', '.join(breakdown.keys())
+
+    # Create a PENDING transaction record
+    txn_id = _generate_txn_id()
+
+    cursor.execute("""
+        SELECT student_name FROM student_fee_records WHERE student_id = ? LIMIT 1
+    """, (student_id,))
+    srow = cursor.fetchone()
+    student_name = srow['student_name'] if srow else 'Alex Kumar'
+
+    cursor.execute("""
+        SELECT usn FROM student_fee_records WHERE student_id = ? LIMIT 1
+    """, (student_id,))
+    urow = cursor.fetchone()
+    usn = urow['usn'] if urow else '1MS21CS084'
+
+    cursor.execute("""
+        INSERT INTO fee_transactions
+        (transaction_id, student_id, usn, student_name, payment_amount, payment_method,
+         payment_status, gateway_reference, payment_date, receipt_number, payment_breakdown,
+         fee_categories, academic_year, semester, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, 'Pending', '', '', NULL, ?, ?, ?, ?, 'Payment initiated. Awaiting gateway confirmation.')
+    """, (txn_id, student_id, usn, student_name, payment_amount, payment_method,
+          json.dumps(breakdown), fee_categories_str, academic_year, semester))
+
+    conn.commit()
+    txn_db_id = cursor.lastrowid
+    conn.close()
+
+    # Return demo order details for the client to display the payment confirmation screen
+    return jsonify({
+        'order_id': txn_id,
+        'transaction_id': txn_id,
+        'fee_categories': fee_categories_str,
+        'transaction_db_id': txn_db_id,
+        'payment_amount': payment_amount,
+        'payment_method': payment_method,
+        'fee_breakdown': breakdown,
+        'status': 'Pending',
+        'demo_mode': True,
+        'message': 'Demo payment initiated. Confirm payment to simulate gateway approval.',
+    }), 201
+
+
+@app.route('/api/fees/payment/confirm', methods=['POST'])
+def confirm_fee_payment():
+    """
+    Confirm a pending payment (demo mode: always succeeds).
+    In production: verify gateway webhook/callback before calling this.
+    Updates student_fee_records and marks transaction as Successful.
+    """
+    data = request.get_json() or {}
+    transaction_id = data.get('transaction_id') or data.get('order_id', '')
+    selected_record_ids = data.get('selected_record_ids', [])
+    payment_amount = data.get('payment_amount', 0.0)
+    simulate_failure = data.get('simulate_failure', False)  # for testing failed path
+
+    if not transaction_id:
+        return jsonify({'error': 'Transaction ID is required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM fee_transactions WHERE transaction_id = ?", (transaction_id,))
+    txn = cursor.fetchone()
+    if not txn:
+        conn.close()
+        return jsonify({'error': 'Transaction record not found.'}), 404
+    if txn['payment_status'] != 'Pending':
+        conn.close()
+        return jsonify({'error': f"Transaction already in status: {txn['payment_status']}."}), 400
+
+    if simulate_failure:
+        cursor.execute("""
+            UPDATE fee_transactions SET payment_status = 'Failed',
+            remarks = 'Payment failed: Gateway returned error code 402. No funds debited.',
+            payment_date = ?
+            WHERE transaction_id = ?
+        """, (datetime.now().strftime('%Y-%m-%d'), transaction_id))
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'success': False,
+            'transaction_id': transaction_id,
+            'status': 'Failed',
+            'message': 'Payment failed. No amount has been debited from your account.',
+        })
+
+    # Success path: update each fee record proportionally
+    if selected_record_ids:
+        placeholders = ','.join(['?' for _ in selected_record_ids])
+        cursor.execute(f"""
+            SELECT id, fee_category, outstanding_amount, amount_paid, total_amount
+            FROM student_fee_records
+            WHERE id IN ({placeholders})
+        """, selected_record_ids)
+        records = cursor.fetchall()
+
+        remaining = float(payment_amount)
+        for r in records:
+            if remaining <= 0:
+                break
+            deduct = min(float(r['outstanding_amount']), remaining)
+            new_paid = round(float(r['amount_paid']) + deduct, 2)
+            new_outstanding = round(float(r['total_amount']) - new_paid, 2)
+            new_status = 'Paid' if new_outstanding <= 0.01 else 'Partial'
+            cursor.execute("""
+                UPDATE student_fee_records
+                SET amount_paid = ?, outstanding_amount = ?, payment_status = ?,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (new_paid, new_outstanding, new_status, r['id']))
+            remaining -= deduct
+
+    # Generate receipt and mark successful
+    receipt_no = _generate_receipt_number()
+    gateway_ref = f"DEMO-GW-{uuid.uuid4().hex[:10].upper()}"
+    cursor.execute("""
+        UPDATE fee_transactions
+        SET payment_status = 'Successful',
+            gateway_reference = ?,
+            payment_date = ?,
+            receipt_number = ?,
+            remarks = 'Payment confirmed via demo gateway. Transaction successful.'
+        WHERE transaction_id = ?
+    """, (gateway_ref, datetime.now().strftime('%Y-%m-%d'), receipt_no, transaction_id))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'transaction_id': transaction_id,
+        'receipt_number': receipt_no,
+        'gateway_reference': gateway_ref,
+        'status': 'Successful',
+        'payment_amount': payment_amount,
+        'payment_date': datetime.now().strftime('%Y-%m-%d'),
+        'message': 'Payment confirmed and recorded successfully. Download your receipt below.',
+    })
+
+
+@app.route('/api/fees/transactions', methods=['GET'])
+def get_fee_transactions():
+    """Return payment transaction history for a student or all (admin)."""
+    student_id = request.args.get('student_id', 1, type=int)
+    role = request.args.get('role', 'student')
+    semester = request.args.get('semester', type=int)
+    academic_year = request.args.get('academic_year', '')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if role == 'admin':
+        query = "SELECT * FROM fee_transactions WHERE 1=1"
+        params = []
+    else:
+        query = "SELECT * FROM fee_transactions WHERE student_id = ?"
+        params = [student_id]
+
+    if semester:
+        query += " AND semester = ?"
+        params.append(semester)
+    if academic_year:
+        query += " AND academic_year = ?"
+        params.append(academic_year)
+
+    query += " ORDER BY created_at DESC"
+    cursor.execute(query, params)
+    txns = [dict(t) for t in cursor.fetchall()]
+
+    # Decode payment_breakdown JSON for each
+    for t in txns:
+        try:
+            t['payment_breakdown'] = json.loads(t['payment_breakdown']) if t['payment_breakdown'] else {}
+        except Exception:
+            t['payment_breakdown'] = {}
+
+    conn.close()
+    return jsonify(txns)
+
+
+@app.route('/api/fees/receipt/<string:transaction_id>', methods=['GET'])
+def get_fee_receipt(transaction_id):
+    """Return receipt details for a successful transaction."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM fee_transactions WHERE transaction_id = ?", (transaction_id,))
+    txn = cursor.fetchone()
+    conn.close()
+
+    if not txn:
+        return jsonify({'error': 'Transaction not found.'}), 404
+    if txn['payment_status'] != 'Successful':
+        return jsonify({'error': f"Receipt not available for transactions with status '{txn['payment_status']}'."}), 400
+
+    txn_dict = dict(txn)
+    try:
+        txn_dict['payment_breakdown'] = json.loads(txn_dict['payment_breakdown'])
+    except Exception:
+        txn_dict['payment_breakdown'] = {}
+
+    return jsonify(txn_dict)
+
+
+@app.route('/api/fees/structures', methods=['GET'])
+def get_fee_structures():
+    """Return fee structures (admin uses department/semester filter)."""
+    department = request.args.get('department', '')
+    semester = request.args.get('semester', type=int)
+    academic_year = request.args.get('academic_year', '2025-2026')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM fee_structures WHERE academic_year = ?"
+    params = [academic_year]
+    if department:
+        query += " AND department = ?"
+        params.append(department)
+    if semester:
+        query += " AND semester = ?"
+        params.append(semester)
+    query += " ORDER BY department ASC, semester ASC, fee_category ASC"
+
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route('/api/fees/structures', methods=['POST'])
+def add_fee_structure():
+    """Admin: add a new fee structure."""
+    data = request.get_json() or {}
+    department = (data.get('department') or '').strip()
+    semester = data.get('semester')
+    academic_year = (data.get('academic_year') or '2025-2026').strip()
+    fee_category = (data.get('fee_category') or '').strip()
+    total_amount = data.get('total_amount', 0.0)
+    due_date = (data.get('due_date') or '').strip()
+    description = (data.get('description') or '').strip()
+    partial_allowed = 1 if data.get('partial_payment_allowed', True) else 0
+
+    if not all([department, semester, fee_category, due_date]) or total_amount <= 0:
+        return jsonify({'error': 'Department, semester, fee category, amount, and due date are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO fee_structures
+            (department, semester, academic_year, fee_category, total_amount, due_date,
+             description, is_active, partial_payment_allowed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+        """, (department, semester, academic_year, fee_category,
+              total_amount, due_date, description, partial_allowed))
+        conn.commit()
+        new_id = cursor.lastrowid
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': f'Fee structure already exists or data conflict: {str(e)}'}), 409
+    conn.close()
+    return jsonify({'message': 'Fee structure added successfully.', 'id': new_id}), 201
+
+
+@app.route('/api/fees/structures/<int:structure_id>', methods=['PUT'])
+def update_fee_structure(structure_id):
+    """Admin: update an existing fee structure."""
+    data = request.get_json() or {}
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM fee_structures WHERE id = ?", (structure_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({'error': 'Fee structure not found.'}), 404
+
+    total_amount = data.get('total_amount', existing['total_amount'])
+    due_date = data.get('due_date', existing['due_date'])
+    description = data.get('description', existing['description'])
+    is_active = 1 if data.get('is_active', existing['is_active']) else 0
+    partial_allowed = 1 if data.get('partial_payment_allowed', existing['partial_payment_allowed']) else 0
+
+    cursor.execute("""
+        UPDATE fee_structures
+        SET total_amount = ?, due_date = ?, description = ?,
+            is_active = ?, partial_payment_allowed = ?
+        WHERE id = ?
+    """, (total_amount, due_date, description, is_active, partial_allowed, structure_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Fee structure updated successfully.'})
+
+
+@app.route('/api/fees/admin/overview', methods=['GET'])
+def get_admin_fees_overview():
+    """Admin overview: collection stats, pending payments, department summaries."""
+    academic_year = request.args.get('academic_year', '2025-2026')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            COUNT(*) as total_records,
+            SUM(total_amount) as total_payable,
+            SUM(amount_paid) as total_collected,
+            SUM(outstanding_amount) as total_outstanding
+        FROM student_fee_records
+        WHERE academic_year = ?
+    """, (academic_year,))
+    overall = dict(cursor.fetchone())
+
+    cursor.execute("""
+        SELECT department, semester,
+            SUM(total_amount) as payable,
+            SUM(amount_paid) as collected,
+            SUM(outstanding_amount) as outstanding,
+            COUNT(*) as students
+        FROM student_fee_records
+        WHERE academic_year = ?
+        GROUP BY department, semester
+        ORDER BY department, semester
+    """, (academic_year,))
+    dept_summary = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT fee_category,
+            SUM(total_amount) as payable,
+            SUM(amount_paid) as collected,
+            SUM(outstanding_amount) as outstanding
+        FROM student_fee_records
+        WHERE academic_year = ?
+        GROUP BY fee_category
+    """, (academic_year,))
+    category_summary = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT student_id, usn, student_name, department, semester,
+            SUM(outstanding_amount) as total_outstanding
+        FROM student_fee_records
+        WHERE academic_year = ? AND payment_status != 'Paid'
+        GROUP BY student_id
+        HAVING total_outstanding > 0
+        ORDER BY total_outstanding DESC
+    """, (academic_year,))
+    pending_students = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT COUNT(*) as total_txns,
+            SUM(CASE WHEN payment_status = 'Successful' THEN payment_amount ELSE 0 END) as successful_amount,
+            COUNT(CASE WHEN payment_status = 'Pending' THEN 1 END) as pending_count,
+            COUNT(CASE WHEN payment_status = 'Failed' THEN 1 END) as failed_count
+        FROM fee_transactions
+        WHERE academic_year = ?
+    """, (academic_year,))
+    txn_stats = dict(cursor.fetchone())
+
+    conn.close()
+
+    return jsonify({
+        'overall': overall,
+        'dept_summary': dept_summary,
+        'category_summary': category_summary,
+        'pending_students': pending_students,
+        'transaction_stats': txn_stats,
+        'academic_year': academic_year,
+    })
+
+
+@app.route('/api/fees/report', methods=['GET'])
+def get_fee_report():
+    """Return a complete fee report for a student."""
+    student_id = request.args.get('student_id', 1, type=int)
+    academic_year = request.args.get('academic_year', '2025-2026')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # All semesters for this student
+    cursor.execute("""
+        SELECT semester,
+            SUM(total_amount) as payable,
+            SUM(amount_paid) as paid,
+            SUM(outstanding_amount) as outstanding
+        FROM student_fee_records
+        WHERE student_id = ? AND academic_year = ?
+        GROUP BY semester
+        ORDER BY semester DESC
+    """, (student_id, academic_year))
+    semester_summary = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT fee_category,
+            SUM(total_amount) as payable,
+            SUM(amount_paid) as paid,
+            SUM(outstanding_amount) as outstanding
+        FROM student_fee_records
+        WHERE student_id = ? AND academic_year = ?
+        GROUP BY fee_category
+        ORDER BY fee_category
+    """, (student_id, academic_year))
+    category_breakdown = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("""
+        SELECT SUM(total_amount), SUM(amount_paid), SUM(outstanding_amount)
+        FROM student_fee_records
+        WHERE student_id = ? AND academic_year = ?
+    """, (student_id, academic_year))
+    r = cursor.fetchone()
+    totals = {'payable': r[0] or 0, 'paid': r[1] or 0, 'outstanding': r[2] or 0}
+
+    cursor.execute("""
+        SELECT * FROM fee_transactions WHERE student_id = ? AND academic_year = ?
+        ORDER BY created_at DESC
+    """, (student_id, academic_year))
+    transactions = [dict(t) for t in cursor.fetchall()]
+    for t in transactions:
+        try:
+            t['payment_breakdown'] = json.loads(t['payment_breakdown'])
+        except Exception:
+            t['payment_breakdown'] = {}
+
+    cursor.execute("""
+        SELECT a.*, s.name as scholarship_name, s.max_amount, s.scholarship_type
+        FROM scholarship_applications a
+        JOIN scholarships s ON a.scholarship_id = s.id
+        WHERE a.student_id = ?
+        ORDER BY a.submitted_at DESC
+    """, (student_id,))
+    scholarships = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("SELECT id, name, identifier as usn, department, semester, email FROM users WHERE id = ?", (student_id,))
+    st_row = cursor.fetchone()
+    student = dict(st_row) if st_row else {
+        'id': student_id,
+        'name': 'Alex Kumar',
+        'usn': '1MS21CS084',
+        'department': 'Computer Science & Engineering',
+        'semester': 6
+    }
+
+    conn.close()
+
+    return jsonify({
+        'student': student,
+        'semester_summary': semester_summary,
+        'category_breakdown': category_breakdown,
+        'totals': totals,
+        'transactions': transactions,
+        'scholarships': scholarships,
+        'academic_year': academic_year,
+        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    })
+
+
+@app.route('/api/fees/scholarships', methods=['GET'])
+def get_scholarships():
+    """Return available scholarships."""
+    academic_year = request.args.get('academic_year', '2025-2026')
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM scholarships
+        WHERE academic_year = ? AND is_active = 1
+        ORDER BY scholarship_type, name
+    """, (academic_year,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route('/api/fees/scholarships', methods=['POST'])
+def add_scholarship():
+    """Admin: create a new scholarship."""
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    description = (data.get('description') or '').strip()
+    eligibility = (data.get('eligibility_criteria') or '').strip()
+    max_amount = data.get('max_amount', 0.0)
+    scholarship_type = (data.get('scholarship_type') or 'Merit').strip()
+    applicable_dept = (data.get('applicable_departments') or 'All').strip()
+    min_cgpa = data.get('min_cgpa', 0.0)
+    max_income = data.get('max_family_income', 0.0)
+    academic_year = (data.get('academic_year') or '2025-2026').strip()
+    deadline = (data.get('application_deadline') or '').strip()
+
+    if not all([name, description, eligibility, deadline]) or max_amount <= 0:
+        return jsonify({'error': 'Name, description, eligibility, max amount, and deadline are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO scholarships
+        (name, description, eligibility_criteria, max_amount, scholarship_type,
+         applicable_departments, min_cgpa, max_family_income, academic_year, application_deadline, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    """, (name, description, eligibility, max_amount, scholarship_type,
+          applicable_dept, min_cgpa, max_income, academic_year, deadline))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return jsonify({'message': 'Scholarship created successfully.', 'id': new_id}), 201
+
+
+@app.route('/api/fees/scholarship-applications', methods=['GET'])
+def get_scholarship_applications():
+    """Return scholarship applications (student: own; admin: all)."""
+    student_id = request.args.get('student_id', 1, type=int)
+    role = request.args.get('role', 'student')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if role == 'admin':
+        cursor.execute("""
+            SELECT a.*, s.name as scholarship_name, s.max_amount, s.scholarship_type
+            FROM scholarship_applications a
+            JOIN scholarships s ON a.scholarship_id = s.id
+            ORDER BY a.submitted_at DESC
+        """)
+    else:
+        cursor.execute("""
+            SELECT a.*, s.name as scholarship_name, s.max_amount, s.scholarship_type,
+                   s.eligibility_criteria
+            FROM scholarship_applications a
+            JOIN scholarships s ON a.scholarship_id = s.id
+            WHERE a.student_id = ?
+            ORDER BY a.submitted_at DESC
+        """, (student_id,))
+
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route('/api/fees/scholarship-applications', methods=['POST'])
+def submit_scholarship_application():
+    """Student: submit a scholarship application."""
+    data = request.get_json() or {}
+    scholarship_id = data.get('scholarship_id')
+    student_id = data.get('student_id', 1)
+    application_text = (data.get('application_text') or '').strip()
+
+    if not scholarship_id or not application_text:
+        return jsonify({'error': 'Scholarship ID and application statement are required.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Fetch student profile
+    cursor.execute("""
+        SELECT p.usn, p.name, p.department, p.semester, p.cgpa
+        FROM student_profiles p WHERE p.user_id = ?
+    """, (student_id,))
+    profile = cursor.fetchone()
+    if not profile:
+        conn.close()
+        return jsonify({'error': 'Student profile not found.'}), 404
+
+    # Prevent duplicate application
+    cursor.execute("""
+        SELECT id FROM scholarship_applications
+        WHERE scholarship_id = ? AND student_id = ?
+    """, (scholarship_id, student_id))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'You have already submitted an application for this scholarship.'}), 409
+
+    cursor.execute("""
+        INSERT INTO scholarship_applications
+        (scholarship_id, student_id, usn, student_name, department, semester, cgpa,
+         application_text, supporting_document, status, approved_amount, admin_remarks,
+         submitted_at, reviewed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', 'Submitted', 0.0, '', CURRENT_TIMESTAMP, '')
+    """, (scholarship_id, student_id, profile['usn'], profile['name'],
+          profile['department'], profile['semester'], profile['cgpa'],
+          application_text))
+
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return jsonify({'message': 'Scholarship application submitted successfully.', 'id': new_id}), 201
+
+
+@app.route('/api/fees/scholarship-applications/<int:app_id>/review', methods=['PUT'])
+def review_scholarship_application(app_id):
+    """Admin: approve, reject, or update a scholarship application."""
+    data = request.get_json() or {}
+    new_status = (data.get('status') or '').strip()
+    admin_remarks = (data.get('admin_remarks') or '').strip()
+    approved_amount = data.get('approved_amount', 0.0)
+
+    valid_statuses = ['Submitted', 'Under Review', 'Approved', 'Rejected']
+    if new_status not in valid_statuses:
+        return jsonify({'error': f"Status must be one of: {', '.join(valid_statuses)}."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM scholarship_applications WHERE id = ?", (app_id,))
+    app_row = cursor.fetchone()
+    if not app_row:
+        conn.close()
+        return jsonify({'error': 'Application not found.'}), 404
+
+    cursor.execute("""
+        UPDATE scholarship_applications
+        SET status = ?, admin_remarks = ?, approved_amount = ?,
+            reviewed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (new_status, admin_remarks, approved_amount, app_id))
+
+    # If approved, optionally create a fee concession record by reducing outstanding
+    if new_status == 'Approved' and approved_amount > 0:
+        cursor.execute("""
+            UPDATE student_fee_records
+            SET amount_paid = MIN(total_amount, amount_paid + ?),
+                outstanding_amount = MAX(0, outstanding_amount - ?),
+                payment_status = CASE WHEN outstanding_amount - ? <= 0.01 THEN 'Paid' ELSE 'Partial' END,
+                last_updated = CURRENT_TIMESTAMP
+            WHERE student_id = ? AND fee_category = 'Tuition Fees'
+              AND semester = ? AND academic_year = '2025-2026'
+        """, (approved_amount, approved_amount, approved_amount,
+              app_row['student_id'], app_row['semester']))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': f'Application {new_status.lower()} successfully.'})
+
+
 # Static React Frontend Serving
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
